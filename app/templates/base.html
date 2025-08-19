@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Work Dashboard{% endblock %}</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    {% block styles %}{% endblock %}
+</head>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+    </div>
+<body data-current-user-id="{{ current_user.id if current_user.is_authenticated else '' }}">
+
+<div class="d-flex">
+    <nav class="sidebar bg-dark text-white p-3 d-flex flex-column">
+        
+        <ul class="nav nav-pills flex-column mb-auto">
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'calendar' %}active{% endif %}" 
+                   href="{{ url_for('main.index') }}" 
+                   title="Working calendar" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </a>
+            </li>
+			<li class="nav-item mb-2">
+				<a class="nav-link text-white {% if page_name == 'practice_log' %}active{% endif %}" 
+				   href="{{ url_for('main.practice_log_dashboard') }}" 
+				   title="Quán Tâm" 
+				   data-bs-toggle="tooltip" 
+				   data-bs-placement="right">
+					<i class="fa-solid fa-leaf"></i>
+				</a>
+			</li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'kanban' %}active{% endif %}" 
+                   href="{{ url_for('main.kanban_board') }}" 
+                   title="Kanban" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-table-columns"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'okr' %}active{% endif %}" 
+                   href="{{ url_for('main.okr_page') }}" 
+                   title="OKR & Kaizen" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-bullseye"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'uploads_manager' %}active{% endif %}" 
+                   href="{{ url_for('main.uploads_manager') }}" 
+                   title="Upload file" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-folder"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'notes' %}active{% endif %}" 
+                   href="{{ url_for('main.notes') }}" 
+                   title="Note" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-note-sticky"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'projects' %}active{% endif %}" 
+                   href="{{ url_for('main.projects_list') }}" 
+                   title="Project" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-diagram-project"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'reports' %}active{% endif %}" 
+                   href="{{ url_for('main.reports_page') }}" 
+                   title="Report" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right">
+                    <i class="fa-solid fa-chart-line"></i>
+                </a>
+            </li>
+        </ul>
+
+        <div class="mt-auto">
+            <form action="{{ url_for('main.search') }}" method="GET" class="mb-2">
+                <div class="input-group">
+                    <input type="search" name="q" class="form-control form-control-sm" placeholder="Tìm..." required>
+                    <button class="btn btn-outline-secondary" type="submit" title="Search">
+                        <i class="fa-solid fa-search"></i>
+                    </button>
+                </div>
+            </form>
+            <a class="nav-link text-white text-center" 
+               href="{{ url_for('auth.logout') }}" 
+               title="Log out" 
+               data-bs-toggle="tooltip" 
+               data-bs-placement="right">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content flex-grow-1 p-4">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header"><strong class="me-auto" id="toastTitle"></strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div>
+    <div class="toast-body" id="toastBody"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/sortablejs/Sortable.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/confetti/confetti.browser.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/tinymce/tinymce.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/masonry/masonry.pkgd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/file-uploader.js') }}"></script>
+
+<script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+</script>
+
+{% block scripts %}{% endblock %}
+<script>
+    /**
+     * Hiển thị một thông báo toast của Bootstrap.
+     * @param {string} title - Tiêu đề của toast.
+     * @param {string} message - Nội dung thông báo.
+     * @param {string} type - Loại toast ('success', 'danger', 'info', 'warning').
+     * @param {number} delay - Thời gian hiển thị (ms).
+     */
+    function showToast(title, message, type = 'info', delay = 5000) {
+        const toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) return;
+
+        const toastId = 'toast-' + Date.now();
+        const toastTypeClasses = {
+            success: { bg: 'bg-success-subtle', icon: 'fa-solid fa-circle-check text-success' },
+            danger:  { bg: 'bg-danger-subtle', icon: 'fa-solid fa-triangle-exclamation text-danger' },
+            warning: { bg: 'bg-warning-subtle', icon: 'fa-solid fa-circle-exclamation text-warning' },
+            info:    { bg: 'bg-info-subtle', icon: 'fa-solid fa-circle-info text-info' }
+        };
+        const toastInfo = toastTypeClasses[type] || toastTypeClasses['info'];
+
+        const toastHTML = `
+            <div id="${toastId}" class="toast ${toastInfo.bg}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="${delay}">
+                <div class="toast-header">
+                    <i class="${toastInfo.icon} me-2"></i>
+                    <strong class="me-auto">${title}</strong>
+                    <small>Vừa xong</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement);
+
+        // Xóa element khỏi DOM sau khi toast đã ẩn
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+
+        toast.show();
+    }
+</script>
+</body>
+</html>

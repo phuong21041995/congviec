@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Project Management{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0"><i class="fa-solid fa-diagram-project me-2"></i>Project Management</h2>
+    <form class="d-flex gap-2" method="GET" action="{{ url_for('main.projects_list') }}">
+        <select class="form-select" name="status">
+            <option value="all" {% if current_status == 'all' %}selected{% endif %}>All status</option>
+            {% for s in status_choices %}
+            <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-outline-secondary" type="submit"><i class="fa-solid fa-filter me-1"></i>Filter</button>
+    </form>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="m-0">Project list</h5>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for project in projects %}
+                {% set status = (project.status or 'Active') %}
+                {% set badge_class = {
+                    'Planned': 'bg-secondary',
+                    'Active': 'bg-primary',
+                    'On Hold': 'bg-warning text-dark',
+                    'Done': 'bg-success'
+                }[status] if status in ['Planned','Active','On Hold','Done'] else 'bg-secondary' %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="me-3">
+                            <h5 class="mb-1">{{ project.name }}</h5>
+                            <p class="mb-1 text-muted">{{ project.description or 'No description' }}</p>
+                            <span class="badge {{ badge_class }}">{{ status }}</span>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <form action="{{ url_for('main.update_project', project_id=project.id) }}" method="POST" class="d-flex gap-2">
+                                <select name="status" class="form-select form-select-sm" style="min-width: 130px;">
+                                    {% for s in status_choices %}
+                                    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="fa-solid fa-floppy-disk me-1"></i>Save
+                                </button>
+                            </form>
+                            <form action="{{ url_for('main.delete_project', project_id=project.id) }}" method="POST"
+                                  onsubmit="return confirm('Really want to delete? All OKR relate also delete!!!');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Project delete">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="list-group-item">Create first project</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><h5 class="m-0">Create new project</h5></div>
+            <div class="card-body">
+                <form action="{{ url_for('main.add_project') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Project name</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            {% for s in status_choices %}<option value="{{ s }}" {% if s=='Active' %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Create</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

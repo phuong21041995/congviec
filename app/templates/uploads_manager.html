@@ -1,0 +1,460 @@
+{% extends "base.html" %}
+{% block title %}Upload File{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="m-0"><i class="fa-solid fa-cloud-arrow-up me-2"></i>File control</h2>
+</header>
+
+<!-- Hàng 3 cột cố định chiều cao -->
+<div class="row row-cols-1 row-cols-xl-3 g-3 mb-3 align-items-stretch">
+  <!-- 1) Upload -->
+	<div class="col">
+		<div class="card h-100 shadow-sm">
+		  <div class="card-header d-flex justify-content-between align-items-center">
+			<h6 class="m-0">Upload file mới</h6>
+			<span class="badge bg-secondary">Tổng số file: {{ total_files }}</span>
+		  </div>
+		  <div class="card-body d-flex flex-column">
+			<div id="drop-zone" class="file-drop-zone p-3 border rounded text-center bg-light flex-grow-1 d-flex flex-column justify-content-center">
+			  <p class="mb-1 fw-semibold">Drag file to here</p>
+			  <p class="text-muted small mb-3">hoặc</p>
+			  <input type="file" id="file-input" multiple style="display:none;">
+			  <button id="file-select-button" class="btn btn-primary btn-sm" type="button">
+				<i class="fa-solid fa-paperclip me-1"></i> Choose file from computer
+			  </button>
+			</div>
+			<div id="progress-area" class="mt-2 small"></div>
+		  </div>
+		</div>
+	</div>
+
+  <!-- 2) Donut: Dung lượng -->
+  <div class="col">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="m-0">Storage</h6>
+        <small class="text-muted">Total: {{ chart_data.total_gb }} GB</small>
+      </div>
+      <div class="card-body">
+        <div style="height:210px">
+          <canvas id="diskUsageChart"></canvas>
+        </div>
+
+        {% if chart_data.files_by_type %}
+        <hr class="my-2">
+        <div class="small">
+          <strong>Top file type:</strong>
+          <ul class="mt-2 mb-0">
+            {% for ext, cnt, bytes in chart_data.files_by_type %}
+              <li>{{ ext }} — {{ (bytes / (1024*1024))|round(2) }} MB ({{ cnt }} file)</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 3) Bar: Top định dạng -->
+  <div class="col">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header"><h6 class="m-0">Top type</h6></div>
+      <div class="card-body">
+        <div style="height:210px">
+          <canvas id="typesBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Danh sách file -->
+<div class="card shadow-sm">
+  <div class="card-header">
+    <form action="{{ url_for('main.uploads_manager') }}" method="GET" class="row g-2 align-items-center">
+      <div class="col-auto"><h6 class="m-0">File list</h6></div>
+
+      <div class="col-12 col-lg">
+        <input type="search" name="q" class="form-control form-control-sm" placeholder="Find by file name..." value="{{ query or '' }}">
+      </div>
+
+      <div class="col-6 col-lg-auto">
+        <select class="form-select form-select-sm" name="context">
+          {% for choice in context_choices %}
+          <option value="{{ choice.value }}" {% if context_filter == choice.value %}selected{% endif %}>{{ choice.text }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-lg-auto">
+        <select class="form-select form-select-sm" name="user">
+          <option value="all">All uploader</option>
+          {% for user in all_users %}
+          <option value="{{ user.id }}" {% if user_filter == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Số file/trang -->
+      <div class="col-6 col-lg-auto">
+        <select class="form-select form-select-sm" name="per_page">
+          {% for n in [10,20,50,100] %}
+          <option value="{{n}}" {% if per_page == n %}selected{% endif %}>{{n}} / Page</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-lg-auto d-grid d-lg-block">
+        <button class="btn btn-sm btn-primary" type="submit">
+          <i class="fa-solid fa-filter me-1"></i> Filter
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">File Name</th>
+            <th>Upploader</th>
+            <th>Type</th>
+            <th>Capa (KB)</th>
+            <th>Upload date (GMT+7)</th>
+            <th class="text-end pe-3">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in files %}
+          <tr data-file-id="{{ file.id }}">
+            <td class="ps-3">
+              <a href="{{ url_for('main.uploaded_file', filename=file.saved_filename) }}" target="_blank" rel="noopener">
+                {{ file.original_filename }}
+              </a>
+            </td>
+            <td>{{ file.uploader.username if file.uploader else 'N/A' }}</td>
+            <td>
+              {% if file.context.url %}
+                <a href="{{ file.context.url }}" class="badge bg-primary text-decoration-none" title="Đi đến {{ file.context.text }}">
+                  {{ file.context.text }} <i class="fa-solid fa-arrow-up-right-from-square fa-xs"></i>
+                </a>
+              {% else %}
+                <span class="badge bg-secondary">{{ file.context.text }}</span>
+              {% endif %}
+            </td>
+            <td>{{ "%.2f"|format((file.file_size or 0) / 1024) }}</td>
+            <td>{{ (file.upload_date_local or file.upload_date).strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-end pe-3">
+              <div class="d-flex gap-2 justify-content-end">
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.uploaded_file', filename=file.saved_filename) }}" download="{{ file.original_filename }}" title="Tải về">
+                  <i class="fa-solid fa-download"></i>
+                </a>
+                <button class="btn btn-sm btn-outline-danger"
+                        onclick="deleteExistingAttachment(this.closest('tr'), '{{ url_for('main.delete_uploaded_file', file_id=file.id) }}', '{{ file.original_filename }}')"
+                        title="Xoá">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No file.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Phân trang -->
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-muted small">
+      Page {{ pagination.page }} / {{ pagination.pages or 1 }} — Total {{ pagination.total }} file
+    </span>
+    <nav>
+	<ul class="pagination pagination-sm mb-0">
+	  {% set base = url_for('main.uploads_manager') %}
+	  {% set q    = (query or '')|urlencode %}
+	  {% set ctx  = context_filter %}
+	  {% set usr  = user_filter %}
+	  {% set pp   = per_page %}
+	  {% set total_pages = pagination.pages or 1 %}
+
+	  {# tính cửa sổ trang mà không dùng max/min #}
+	  {% set start = pagination.page - 2 %}
+	  {% if start < 1 %}{% set start = 1 %}{% endif %}
+	  {% set end = pagination.page + 2 %}
+	  {% if end > total_pages %}{% set end = total_pages %}{% endif %}
+	  
+
+	  <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+		<a class="page-link" href="{{ base }}?q={{ q }}&context={{ ctx }}&user={{ usr }}&per_page={{ pp }}&page=1">&laquo;</a>
+	  </li>
+	  <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+		<a class="page-link" href="{{ base }}?q={{ q }}&context={{ ctx }}&user={{ usr }}&per_page={{ pp }}&page={{ pagination.prev_num if pagination.has_prev else 1 }}">&lsaquo;</a>
+	  </li>
+
+	  {% for p in range(start, end + 1) %}
+		<li class="page-item {% if p == pagination.page %}active{% endif %}">
+		  <a class="page-link" href="{{ base }}?q={{ q }}&context={{ ctx }}&user={{ usr }}&per_page={{ pp }}&page={{ p }}">{{ p }}</a>
+		</li>
+	  {% endfor %}
+
+	  <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+		<a class="page-link" href="{{ base }}?q={{ q }}&context={{ ctx }}&user={{ usr }}&per_page={{ pp }}&page={{ pagination.next_num if pagination.has_next else pagination.page }}">&rsaquo;</a>
+	  </li>
+	  <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+		<a class="page-link" href="{{ base }}?q={{ q }}&context={{ ctx }}&user={{ usr }}&per_page={{ pp }}&page={{ total_pages }}">&raquo;</a>
+	  </li>
+	</ul>    
+	</nav>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='vendor/chartjs/chartjs-plugin-datalabels@2.js') }}"></script>
+  <script>
+    // ===== Charts =====
+    // Lấy dữ liệu từ backend
+    const chartData = {{ chart_data|tojson }};
+
+    // Đăng ký plugin hiển thị data labels
+    Chart.register(ChartDataLabels);
+
+    // Donut: disk usage
+    (function(){
+      const el = document.getElementById('diskUsageChart');
+      if (!el) return;
+
+      new Chart(el, {
+        type: 'doughnut',
+        data: {
+          labels: ['Uploaded (GB)', 'Other (GB)', 'Free (GB)'],
+          datasets: [{
+            data: [
+              chartData.uploaded_size_gb,
+              chartData.other_data_size_gb,
+              chartData.free_space_gb
+            ],
+            backgroundColor: ['#4CAF50', '#FFC107', '#F44336']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+            datalabels: {
+              color: '#000',
+              formatter: (value, ctx) => {
+                const label = ctx.chart.data.labels[ctx.dataIndex];
+                return `${label}: ${value} GB`;
+              },
+              font: { weight: 'bold' }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    })();
+
+    // Bar: top file types by size (MB)
+    (function(){
+      const el = document.getElementById('typesBarChart');
+      if (!el || !chartData.files_by_type?.length) return;
+
+      const labels = chartData.files_by_type.map(it => it[0]);
+      const values = chartData.files_by_type.map(it =>
+        (it[2] / (1024 * 1024)).toFixed(2)
+      );
+
+      new Chart(el, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: '#42A5F5'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              ticks: {
+                callback: v => v + ' MB'
+              }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              color: '#000',
+              anchor: 'end',
+              align: 'top',
+              formatter: v => `${v} MB`,
+              font: { weight: 'bold' }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    })();
+
+    // ===== Upload (gửi source=direct) =====
+    async function deleteExistingAttachment(rowElement, url, filename) {
+      if (!confirm(`Xóa "${filename}"?`)) return;
+      try {
+        const res = await fetch(url, { method: 'POST' });
+        const result = await res.json();
+        if (result.success) {
+          rowElement.remove();
+          showToast('Success', 'Deleted file', 'success');
+        } else {
+          showToast('Error', result.message, 'danger');
+        }
+      } catch (e) {
+        showToast('Network error', e.message, 'danger');
+      }
+    }
+
+    // ===== PHẦN UPLOAD MỚI - HỖ TRỢ UPLOAD NHIỀU FILE CÙNG LÚC =====
+    document.addEventListener('DOMContentLoaded', function() {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const selectBtn = document.getElementById('file-select-button');
+      const progressArea = document.getElementById('progress-area');
+
+      // Thoát nếu không tìm thấy các element cần thiết
+      if (!dropZone || !fileInput || !selectBtn || !progressArea) return;
+
+      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB mỗi chunk
+
+      // URLs cho API
+      const INIT_URL = "{{ url_for('uploads_api.upload_init') }}";
+      const CHUNK_URL = "{{ url_for('uploads_api.upload_chunk') }}";
+      const COMPLETE_URL = "{{ url_for('uploads_api.upload_complete') }}";
+
+      // Hàm xử lý khi người dùng chọn hoặc kéo file
+      function handleFiles(files) {
+        // Lặp qua TẤT CẢ các file và gọi hàm upload cho từng file
+        // Trình duyệt sẽ tự động xử lý việc upload song song
+        [...files].forEach(uploadFile);
+      }
+
+      // Hàm upload chính cho MỘT file, sử dụng async/await cho dễ đọc
+      async function uploadFile(file) {
+        // Tạo giao diện thanh tiến trình cho file này
+        const progressId = `progress-${Math.random().toString(36).slice(2, 11)}`;
+        const progressHTML = `
+            <div class="upload-item mb-2" id="${progressId}">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-truncate" style="max-width: 200px;">${file.name}</span>
+                    <span class="progress-percent">Bắt đầu...</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar" role="progressbar" style="width: 0%;"></div>
+                </div>
+            </div>`;
+        progressArea.insertAdjacentHTML('beforeend', progressHTML);
+
+        const progressBar = document.querySelector(`#${progressId} .progress-bar`);
+        const progressPercent = document.querySelector(`#${progressId} .progress-percent`);
+
+        function updateProgress(percent, text) {
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = text;
+        }
+
+        try {
+            // ----- BƯỚC 1: BÁO CÁO LÊN SERVER ĐỂ LẤY UPLOAD_ID -----
+            updateProgress(0, 'Khởi tạo...');
+            const initResponse = await fetch(INIT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name, total_size: file.size })
+            });
+
+            const initData = await initResponse.json();
+            if (!initData.success) throw new Error(initData.message || 'Không thể khởi tạo upload.');
+            
+            const { upload_id } = initData;
+
+            // ----- BƯỚC 2: CẮT FILE VÀ UPLOAD TỪNG CHUNK -----
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('upload_id', upload_id);
+                formData.append('index', i);
+                formData.append('chunk', chunk, file.name);
+
+                const chunkResponse = await fetch(CHUNK_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!chunkResponse.ok) throw new Error(`Lỗi upload chunk ${i + 1}`);
+
+                const percentComplete = Math.round(((i + 1) / totalChunks) * 100);
+                updateProgress(percentComplete, `${percentComplete}%`);
+            }
+
+            // ----- BƯỚC 3: BÁO CÁO HOÀN THÀNH -----
+            updateProgress(100, 'Hoàn tất...');
+            const completeResponse = await fetch(COMPLETE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ upload_id: upload_id })
+            });
+
+            const completeData = await completeResponse.json();
+            if (!completeData.success) throw new Error(completeData.message || 'Lỗi khi ghép file.');
+
+            // Thành công!
+            progressBar.classList.add('bg-success');
+            updateProgress(100, 'Thành công!');
+            // Tải lại trang để cập nhật danh sách sau 1.5s
+            setTimeout(() => window.location.reload(), 1500);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            progressBar.classList.add('bg-danger');
+            updateProgress(100, 'Thất bại!');
+            progressPercent.title = error.message; // Hiển thị chi tiết lỗi khi hover
+        }
+      }
+
+      // Gán sự kiện cho các element
+      selectBtn.onclick = () => fileInput.click();
+      fileInput.addEventListener('change', e => {
+        if (e.target.files.length) handleFiles(e.target.files);
+        e.target.value = ''; // Reset input để có thể chọn lại file giống hệt
+      });
+
+      // Sự kiện kéo/thả
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          dropZone.addEventListener(eventName, e => {
+              e.preventDefault();
+              e.stopPropagation();
+          });
+      });
+      ['dragenter', 'dragover'].forEach(eventName => {
+          dropZone.addEventListener(eventName, () => dropZone.classList.add('border-primary', 'bg-white'));
+      });
+      ['dragleave', 'drop'].forEach(eventName => {
+          dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-primary', 'bg-white'));
+      });
+      dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+    });
+  </script>
+{% endblock %}
+

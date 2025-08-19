@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+{% block title %}Kanban Board{% endblock %}
+
+{% block styles %}
+<style>
+
+    .kanban-board-container { display:flex; gap:0.2rem; overflow-x:auto; padding-bottom:1rem; }
+    .kanban-column { flex:1 1 0; min-width:10px; max-width:100%; background: #f6f7fb; border-radius:.75rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+    .kanban-column-header {
+        display:flex; justify-content:space-between; align-items:center;
+        padding:.4rem 1rem; color:#fff; border-top-left-radius:.75rem; border-top-right-radius:.75rem;
+        background: linear-gradient(135deg, var(--col, #64748b) 0%, color-mix(in srgb, var(--col, #64748b) 70%, black) 100%);
+        box-shadow: 0 8px 18px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.25);
+        backdrop-filter: saturate(1.1) blur(4px);
+    }
+    .kanban-column-title { font-weight:600; font-size:1rem; letter-spacing:.1px; text-shadow:0 1px 0 rgba(0,0,0,.15); display: flex; align-items: center; gap: 0.1rem;}
+    .kanban-cards-container { padding: .5rem; min-height:500px; height: calc(119vh - 350px); overflow-y: auto; }
+	/* 2. THU NHỎ CARD LẠI */
+	.kanban-card {
+		background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+		border-radius:.75rem; 
+		padding: 0.2rem 0.85rem; /* Giảm padding cho card nhỏ lại */
+		margin-bottom:.1rem;
+		box-shadow: 0 4px 14px rgba(15,23,42,.06);
+		border:1px solid rgba(100,116,139,.15);
+		cursor:pointer; 
+		transition: transform .12s ease, box-shadow .12s ease;
+	}
+
+	/* Giảm khoảng cách trong card một chút */
+	.card-content {
+		gap: 0.1rem; 
+	}
+	.card-meta-info {
+		gap: 0.1rem;
+	}
+    .kanban-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15,23,42,.12); }
+    .kanban-card.overdue { border-left: 5px solid #dc3545; }
+    .kanban-card.status-done { opacity: 0.8; }
+    .kanban-card.status-done .card-content {text-decoration: line-through; color: #6c757d; }
+	.card-content {
+		font-weight: 500;
+		word-break: break-word;
+		font-size: 0.9rem;
+		
+		/* Chuyển sang Flexbox */
+		display: flex;
+		justify-content: space-between; /* Đẩy 2 nhóm ra xa nhau */
+		align-items: center;
+		gap: 0.5rem; /* Khoảng cách giữa các phần tử */
+		margin-bottom: 0 !important; /* Bỏ margin-bottom cũ */
+	}
+	/* Style cho phần chữ tên công việc */
+	.card-title-text {
+		white-space: nowrap;      /* Không xuống dòng */
+		overflow: hidden;         /* Ẩn phần bị thừa */
+		text-overflow: ellipsis;  /* Hiển thị dấu "..." */
+		flex-grow: 1;             /* Tự động chiếm không gian còn lại */
+	}
+	/* Container cho nhóm thông tin meta bên phải */
+	.card-meta-info {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem; /* Khoảng cách giữa các icon */
+		flex-shrink: 0; /* Không bị co lại khi tên công việc quá dài */
+		color: #6c757d; /* Màu chữ xám cho các icon */
+	}
+
+	.card-assignee-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 24px;
+		min-width: 24px; /* Thay width bằng min-width */
+		border-radius: 12px; /* Chuyển sang bo tròn theo chiều cao */
+		background-color: #e9ecef;
+		color: #495057;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		padding: 0 6px; /* Thêm padding ngang */
+	}
+	.card-assignee-badge .fa-user {
+		display: none; /* Ẩn icon người dùng mặc định */
+	}
+
+	/* Hiển thị icon người dùng khi không có tên PIC */
+	.card-assignee-badge:has(span:empty) .fa-user {
+		display: inline-block;
+	}
+	.card-assignee-badge:has(span:empty) span {
+		display: none;
+	}
+
+    .card-assignee { display:flex; gap:.75rem; align-items:center; }
+    .sortable-ghost { opacity:.5; background:#e8f4ff; border:1px dashed #0d6efd; }
+    .add-task-btn { background:transparent; border:none; width:100%; text-align:left; padding:.6rem .75rem; border-radius:.5rem; color:#6c757d; cursor: pointer; }
+    .add-task-btn:hover { background:#e9eefb; }
+    .attachment-list {
+        font-size: 0.8rem;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border-top: 1px solid #e9ecef;
+        padding-top: 0.65rem;
+        margin-top: 0.65rem;
+    }
+    .attachment-item {
+        color: #6c757d;
+        text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .attachment-item:hover {
+        color: #0d6efd;
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="m-0"><i class="fa-solid fa-table-columns me-2"></i>Kanban Board</h2>
+    <div class="d-flex align-items-center gap-2">
+        
+        <button id="add-task-btn" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-plus me-2"></i>Add event
+        </button>
+
+        <div class="btn-group">
+            <a href="{{ url_for('main.kanban_board', period='day', user_id=filters.user, overdue=filters.overdue) }}" class="btn btn-outline-primary btn-sm {% if filters.period == 'day' %}active{% endif %}">Day</a>
+            <a href="{{ url_for('main.kanban_board', period='week', user_id=filters.user, overdue=filters.overdue) }}" class="btn btn-outline-primary btn-sm {% if filters.period == 'week' %}active{% endif %}">Week</a>
+            <a href="{{ url_for('main.kanban_board', period='month', user_id=filters.user, overdue=filters.overdue) }}" class="btn btn-outline-primary btn-sm {% if filters.period == 'month' %}active{% endif %}">Month</a>
+            <a href="{{ url_for('main.kanban_board', period='total', user_id=filters.user, overdue=filters.overdue) }}" class="btn btn-outline-primary btn-sm {% if filters.period == 'total' %}active{% endif %}">Total</a>
+        </div>
+
+        <div class="form-check form-switch" title="Chỉ hiển thị các công việc quá hạn">
+            <input class="form-check-input" type="checkbox" role="switch" id="overdue-filter-switch" {% if filters.overdue == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="overdue-filter-switch">Overdue</label>
+        </div>
+        
+        <select id="user-filter" name="user_filter" class="form-select form-select-sm" title="Filter by user" style="width: 150px;">
+            <option value="all">All Users</option>
+            {% for user in users %}
+            <option value="{{ user.id }}" {% if filters.user == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chartCollapseArea" aria-expanded="false" aria-controls="chartCollapseArea">
+            <i class="fa-solid fa-chart-line"></i>
+        </button>
+    </div>
+</header>
+
+
+<div class="collapse" id="chartCollapseArea">
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div style="height: 250px;"><canvas id="summaryChartCanvas"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div style="height: 250px;"><canvas id="statusDonutChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="kanban-board-container" data-update-url="{{ url_for('main.update_task_status') }}">
+    
+	{% for status in kanban_statuses %}
+		{% set tasks = grouped_tasks.get(status, []) %}
+		{% set meta = status_meta.get(status, {}) %} 
+		<div class="kanban-column">
+			<div class="kanban-column-header" style="--col: {{ meta.get('color', '#64748b') }};">
+				<span class="kanban-column-title"><i class="{{ meta.get('icon', 'fa-solid fa-question-circle') }} me-2"></i>{{ status }}</span>
+				<span class="badge bg-light text-dark rounded-pill shadow-sm">{{ tasks|length }}</span>
+			</div>
+			
+            
+            <div class="kanban-cards-container" data-status="{{ status }}">
+                
+                {% for task in tasks %}
+                    {% set is_overdue = task.task_date and task.task_date < today_date_obj and task.status != 'Done' %}
+					<div class="kanban-card {% if is_overdue %}overdue{% endif %} {% if task.status == 'Done' %}status-done{% endif %}"
+						 data-task-id="{{ task.id }}"
+						 data-task-json='{{ task.to_dict() | tojson | safe }}'>
+						
+						<div class="card-content">
+							<span class="card-title-text">{{ task.what }}</span>
+							
+							<div class="card-meta-info">
+								<span class="card-assignee-badge" title="{{ task.assignee.username if task.assignee else 'N/A' }}">
+									<i class="fa-solid fa-user"></i>
+									<span>{{ (task.assignee.username if task.assignee else 'N/A')[:3]}}</span>
+								</span>
+								{% if task.note %}<i class="fa-solid fa-comment-dots" title="Có ghi chú"></i>{% endif %}
+								{% if task.attachments %}<i class="fa-solid fa-paperclip" title="Có file đính kèm"></i>{% endif %}
+								{% if task.task_date %}
+								<span class="badge {% if is_overdue %}bg-danger{% else %}bg-secondary-subtle text-secondary-emphasis{% endif %}">
+									<i class="fa-solid fa-calendar-day me-1"></i>{{ task.task_date.strftime('%d/%m') }}
+								</span>
+								{% endif %}
+							</div>
+						</div>
+					
+                        
+                        {% if task.attachments %}
+                            <div class="attachment-list">
+                                {% for file in task.attachments %}
+                                    <a href="{{ url_for('main.uploaded_file', filename=file.saved_filename) }}" target="_blank" class="attachment-item" title="{{ file.original_filename }}">
+                                        <i class="fa-solid fa-paperclip me-1"></i>
+                                        <span>{{ file.original_filename }}</span>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div> </div> {% endfor %} </div>
+
+{% include 'partials/_task_modal.html' %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="taskDetailOffcanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="fa-solid fa-list-check me-2"></i>Job detail</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body" id="taskDetailBody"></div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/sortablejs/Sortable.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+
+<script>
+    window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
+    window.UPDATE_TASK_TIME_URL = "{{ url_for('main.update_task_time') }}";
+    window.DELETE_TASK_URL_BASE = "{{ url_for('main.delete_task', task_id=0) }}".replace('/0', '/');
+    window.CURRENT_USER_ID = "{{ current_user.id }}";
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- LOGIC CHO CÁC BỘ LỌC ---
+        const userFilter = document.getElementById('user-filter');
+        if (userFilter) {
+            userFilter.addEventListener('change', function() {
+                const url = new URL(window.location.href);
+                url.searchParams.set('user_id', this.value);
+                window.location.href = url.toString();
+            });
+        }
+        
+        const overdueSwitch = document.getElementById('overdue-filter-switch');
+        if (overdueSwitch) {
+            overdueSwitch.addEventListener('change', function() {
+                const url = new URL(window.location.href);
+                if (this.checked) {
+                    url.searchParams.set('overdue', '1');
+                } else {
+                    url.searchParams.delete('overdue');
+                }
+                window.location.href = url.toString();
+            });
+        }
+		// --- KHỞI TẠO BIỂU ĐỒ
+
+        const statusMeta = {{ status_meta | tojson | safe }};
+        const statusColors = Object.fromEntries(
+            Object.entries(statusMeta).map(([status, meta]) => [status, meta.color])
+        );
+
+        const statusOrder = ['Pending', 'In Progress', 'Review', 'Done', 'Drop'];
+
+        // 1. Biểu đồ cột chồng (Summary)
+        {% if summary_data %}
+        const summaryCtx = document.getElementById('summaryChartCanvas');
+        const summaryData = {{ summary_data | tojson | safe }};
+        if (summaryCtx && summaryData.length > 0) {
+            const labels = summaryData.map(d => d.user.username);
+            const statuses = statusOrder;
+            const datasets = statuses.map(status => ({
+                label: status,
+                data: summaryData.map(d => d.status_counts[status] || 0),
+                backgroundColor: statusColors[status],
+            }));
+            new Chart(summaryCtx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { title: { display: true, text: 'Task Distribution by User'}, legend: { display: true, position: 'top', labels: { boxWidth: 12, padding: 10 } } },
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+        {% endif %}
+
+        // 2. Biểu đồ tròn (Overall Status)
+        {% if overall_status_counts %}
+        const donutCtx = document.getElementById('statusDonutChart');
+        const donutData = {{ overall_status_counts | tojson | safe }};
+        if (donutCtx && Object.keys(donutData).length > 0) {
+            const labels = statusOrder.filter(status => donutData.hasOwnProperty(status));
+            const data = labels.map(status => donutData[status]);
+            const backgroundColors = labels.map(label => statusColors[label]);
+            new Chart(donutCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{ label: 'Tasks', data, backgroundColor: backgroundColors, borderColor: '#fff' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Overall Status'},
+                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } },
+                        datalabels: {
+                            formatter: (value, ctx) => {
+                                const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (sum === 0) return '0%';
+                                const percentage = (value / sum * 100).toFixed(1) + '%';
+                                return percentage;
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold' }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels]
+            });
+        }
+        {% endif %}
+        
+        // [THAY ĐỔI] - Kích hoạt nút "Thêm công việc" duy nhất ở cột Pending
+        const addTaskBtn = document.getElementById('add-task-btn');
+        if (addTaskBtn && typeof window.openCreateModal === 'function') {
+            addTaskBtn.addEventListener('click', function() {
+                const today = new Date().toISOString().split('T')[0];
+                // Mở modal và gán cứng trạng thái là 'Pending'
+                window.openCreateModal({ date: today, hour: '', status: 'Pending' });
+            });
+        }
+
+        // --- LOGIC CHO KÉO THẢ (SORTABLEJS) ---
+        const updateUrl = document.querySelector('.kanban-board-container').dataset.updateUrl;
+        document.querySelectorAll('.kanban-cards-container').forEach(column => {
+            new Sortable(column, {
+                group: 'kanban-tasks',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: function(evt) {
+                    const taskId = evt.item.dataset.taskId;
+                    const newStatus = evt.to.dataset.status;
+                    fetch(updateUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ taskId, newStatus })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) {
+                            console.error("Failed to update task status.");
+                            evt.from.appendChild(evt.item); // Revert on failure
+                        }
+                    });
+                }
+            });
+        });
+        // --- 5. LOGIC LƯU TRẠNG THÁI BIỂU ĐỒ (THÊM VÀO ĐÂY) ---
+        const chartCollapseElement = document.getElementById('chartCollapseArea');
+        if (chartCollapseElement) {
+            const bsCollapse = new bootstrap.Collapse(chartCollapseElement, {
+                toggle: false // Ngăn không cho nó tự động bật/tắt
+            });
+
+            // Khi tải trang, kiểm tra localStorage và hiển thị chart nếu cần
+            if (localStorage.getItem('isChartVisible') === 'true') {
+                bsCollapse.show();
+            }
+
+            // Khi chart được BẬT, lưu trạng thái vào localStorage
+            chartCollapseElement.addEventListener('shown.bs.collapse', function () {
+                localStorage.setItem('isChartVisible', 'true');
+            });
+
+            // Khi chart bị TẮT, xóa trạng thái khỏi localStorage
+            chartCollapseElement.addEventListener('hidden.bs.collapse', function () {
+                localStorage.setItem('isChartVisible', 'false');
+            });
+        }
+    });
+	
+</script>
+{% endblock %}

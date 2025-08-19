@@ -1,0 +1,101 @@
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="taskForm" novalidate>
+        <div class="modal-header">
+          <h5 class="modal-title" id="taskModalLabel"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="taskId" name="taskId">
+          
+          <div class="mb-3">
+            <label for="taskWhat" class="form-label">What</label>
+            <input type="text" class="form-control" id="taskWhat" name="taskWhat" required>
+          </div>
+          <div class="row">
+            <div class="col-md-3 mb-3">
+              <label for="taskDate" class="form-label">Date</label>
+              <input type="date" class="form-control" id="taskDate" name="taskDate" required>
+            </div>
+            <div class="col-md-3 mb-3">
+              <label for="taskHour" class="form-label">Time</label>
+              <select class="form-select" id="taskHour" name="taskHour">
+                <option value="">all day</option>
+                {% for h in range(8, 20) %}
+                <option value="{{ h }}">{{ h }}:00</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3 mb-3">
+              <label for="taskWho" class="form-label">PIC</label>
+              <select class="form-select" id="taskWho" name="taskWho">
+                <option value="">--- Select --</option>
+                {% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3 mb-3">
+              <label for="taskStatus" class="form-label">Status</label>
+              <select class="form-select" id="taskStatus" name="taskStatus">
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Review">Review</option>
+                <option value="Done">Done</option>
+                <option value="Drop">Drop</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="taskRecurrence" class="form-label">Repeat</label>
+              <select class="form-select" id="taskRecurrence" name="taskRecurrence">
+                <option value="none">No repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-3" id="recurrence-end-date-wrapper" style="display: none;">
+              <label for="taskRecurrenceEndDate" class="form-label">End repeat day</label>
+              <input type="date" class="form-control" id="taskRecurrenceEndDate" name="taskRecurrenceEndDate">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="taskNote" class="form-label">Note</label>
+            <textarea class="form-control" id="taskNote" name="taskNote" rows="3"></textarea>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label">Current attached file:</label>
+              <div id="existing-attachments-list">
+                  </div>
+          </div>
+          <hr class="my-3">
+          <div class="mb-3">
+            <label class="form-label">Attached new file:</label>
+            <div class="file-drop-zone p-4 border rounded text-center bg-light"
+                 data-upload-url="{{ url_for('main.upload_attachment') }}"
+                 data-parent-id-field="taskId"
+                 data-parent-id-name="task_id">
+              <p class="m-0">Drag file or paste from clipboard</p>
+            </div>
+            <input type="file" class="file-input-trigger" multiple style="display: none;">
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2 file-select-button">
+              <i class="fa-solid fa-paperclip me-1"></i> Choose file from computer
+            </button>
+            <div class="attachment-list mt-2 border rounded p-2" style="max-height: 150px; overflow-y: auto; display: none;"></div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <div>
+            <button type="button" id="deleteTaskBtn" class="btn btn-danger" style="display: none;">Delte</button>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

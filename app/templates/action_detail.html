@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Detail action{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">
+        <a href="{{ url_for('main.okr_page', date_str=action.key_result.objective.start_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none text-muted me-2">
+            <i class="fa-solid fa-arrow-left"></i>
+        </a>
+        Detail action
+    </h2>
+</header>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h4>{{ action.content | safe }}</h4>
+        <hr>
+        
+        <form id="reportForm" action="{{ url_for('main.save_action_report', action_id=action.id) }}" method="POST">
+            <input type="hidden" id="actionItemId" value="{{ action.id }}">
+            <div class="mb-3">
+                <h5>Report / Note</h5>
+                <textarea name="report_content" id="report-editor">{{ action.report | safe }}</textarea>
+            </div>
+            <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        <hr>
+
+        <h5>Attach file</h5>
+        <div class="file-drop-zone p-4 border rounded text-center bg-light"
+             data-upload-url="{{ url_for('main.upload_attachment') }}"
+             data-parent-id-field="actionItemId"
+             data-parent-id-name="action_item_id">
+            <p class="m-0">Drag or paste from clipboard.</p>
+        </div>
+        
+        <input type="file" class="file-input-trigger" multiple style="display: none;">
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-2 file-select-button">
+            <i class="fa-solid fa-paperclip me-1"></i> Choose file from computer
+        </button>
+
+        <h5 class="mt-3">Attached file:</h5>
+        <div class="attachment-list list-group">
+            {% for attachment in action.attachments %}
+                <div class="attachment-item list-group-item d-flex justify-content-between align-items-center" data-file-id="{{ attachment.id }}">
+                    <a href="{{ url_for('main.uploaded_file', filename=attachment.saved_filename) }}" target="_blank">
+                        {{ attachment.original_filename }}
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            onclick="deleteExistingAttachment(this, '{{ url_for('main.delete_uploaded_file', file_id=attachment.id) }}', '{{ attachment.original_filename }}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Xóa file đính kèm đã có
+    async function deleteExistingAttachment(btn, url, filename) {
+        if (confirm(`Really want delete "${filename}" ?`)) {
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    btn.closest('.attachment-item').remove();
+                } else {
+                    showToast('Error', result.message, 'danger');
+                }
+            } catch (err) {
+                showToast('Network error', err.message, 'danger');
+            }
+        }
+    }
+
+    // === TinyMCE v8 community - chạy offline ===
+    tinymce.init({
+        selector: '#report-editor',
+
+        // BẮT BUỘC khi dùng bản community
+        license_key: 'gpl',
+
+        // Nếu base.html đã include tinymce.min.js thì giữ nguyên.
+        // base_url để TinyMCE tự resolve đúng đường dẫn plugins/skins/icons khi self-host.
+        // (Nếu bạn đã set sẵn ở global, có thể bỏ dòng này.)
+        base_url: '{{ url_for("static", filename="vendor/tinymce") }}',
+        suffix: '.min',
+
+        // Chỉ plugin free (loại bỏ plugin premium gây lỗi license/404)
+        plugins: 'autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen table paste help wordcount',
+
+        toolbar: 'undo redo | formatselect | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image | table | code | fullscreen | preview',
+        menubar: false,
+
+        paste_data_images: true,          // cho phép dán ảnh base64 (tùy nhu cầu)
+        automatic_uploads: true,
+        images_upload_url: "{{ url_for('main.upload_image') }}",
+
+        promotion: false                  // ẩn banner upgrade
+    });
+</script>
+{% endblock %}

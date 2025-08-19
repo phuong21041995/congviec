@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}Plan{% endblock %}
+
+{% block styles %}
+<style>
+
+	/* Style cho ô được click để tạo sự kiện mới */
+	.task-cell.cell-creating {
+	  background-color: #eef5ff !important; /* Màu nền xanh nhạt */
+	  box-shadow: inset 0 0 0 2px #0d6efd; /* Viền xanh bên trong */
+	  z-index: 5; /* Đảm bảo nó nổi lên trên các ô khác */
+	}
+
+	/* Style cho "bóng mờ" của sự kiện khi đang được kéo đi */
+	.sortable-ghost {
+	  opacity: 0.5;
+	  background: #c8ebfb; /* Màu nền xanh da trời nhạt */
+	  border: 2px dashed #0d6efd; /* Viền đứt nét */
+	}
+	/* CSS cho danh sách Summary nhỏ gọn hơn */
+	.summary-task-list .list-group-item {
+		font-size: 0.8rem; /* Giảm kích thước chữ */
+		padding: 0.5rem 0.75rem; /* Giảm khoảng cách trên dưới */
+	}
+
+	.summary-task-list .list-group-item .badge {
+		font-size: 0.65rem; /* Làm nhỏ badge trạng thái */
+	}
+
+	.summary-task-list .list-group-item .small {
+		font-size: 0.75rem; /* Kích thước ngày tháng */
+	}
+  .calendar-grid-container {
+    height: calc(110h - 180px);
+    overflow-y: auto;
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: .1rem;
+  }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 40px repeat({{ week_dates|length }}, minmax(80px, 1fr));
+    grid-auto-rows: min-content;
+  }
+  .grid-header { position: sticky; top: 0; z-index: 10; background-color: white; padding: 0.1rem; text-align: center; border-bottom: 1px solid var(--border-color); font-weight: bold; }
+  .allday-cell {
+    grid-column: span 1;
+    padding: 4px; border-bottom: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color);
+    min-height: 60px; background-color: #f8f9fa;
+  }
+  .allday-header { position: sticky; left: 0; z-index: 11; background-color: #f8f9fa; grid-column: 1 / 2; font-weight: bold; text-align: center; padding: 4px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); font-size: 0.8rem; display: flex; align-items: center; justify-content: center; }
+  .hour-cell { position: sticky; left: 0; z-index: 11; grid-column: 1 / 2; text-align: center; font-weight: bold; background-color: var(--bg-light); padding: 4px 0; border-top: 1px solid #e0e0e0; border-right: 1px solid var(--border-color); font-size: 0.8rem; display: flex; align-items: center; justify-content: center; }
+  .task-cell { position: relative; min-height: 50px; padding: 2px; border-top: 1px solid #e0e0e0; border-left: 1px solid var(--border-color); transition: background-color 0.2s; }
+  
+  /* Styles for status colors and strikethrough */
+  .timed-task-item.status-pending { border-left-color: #6c757d; }
+  .timed-task-item.status-in-progress { border-left-color: #0d6efd; }
+  .timed-task-item.status-review { border-left-color: #6f42c1; }
+  .timed-task-item.status-done { border-left-color: #198754; background-color: #e9f5ee; text-decoration: line-through;}
+  .timed-task-item.status-drop { border-left-color: #dc3545; opacity: 0.7; }
+ 
+  .timed-task-item {
+    padding: 0px 0px;
+    border-radius: 1px;
+    margin-bottom: 5px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    border-left: 8px solid transparent; /* Used to display the status color */
+  }  
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="m-0"><i class="fa-solid fa-calendar-days me-2"></i>Working</h2>
+  
+  <div class="d-flex align-items-center">
+    <a href="{{ url_for('main.index', view_mode=view_mode, date_str=prev_period_date, user_id=selected_user_id) }}" class="btn btn-outline-secondary"><i class="fa-solid fa-chevron-left"></i></a>
+    <h4 class="m-0 text-primary mx-3" style="min-width: 250px; text-align: center;">{{ date_display }}</h4>
+    <a href="{{ url_for('main.index', view_mode=view_mode, date_str=next_period_date, user_id=selected_user_id) }}" class="btn btn-outline-secondary"><i class="fa-solid fa-chevron-right"></i></a>
+  </div>
+
+  <div class="d-flex align-items-center">
+    <div class="me-3">
+        <select id="user-filter-select" class="form-select form-select-sm" style="min-width: 150px;">
+            <option value="all">All Users</option>
+            {% for user in users %}
+            <option value="{{ user.id }}" {% if selected_user_id == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="btn-group">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-calendar-day"></i></span>
+            <input type="date" id="day-picker-input" class="form-control" value="{{ date_str }}" title="Select a day to view">
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-primary {% if view_mode == 'week' %}active{% endif %} dropdown-toggle" data-bs-toggle="dropdown">Week</button>
+            <ul class="dropdown-menu" style="max-height: 280px; overflow-y: auto;">
+                {% for week in weeks_in_year %}
+                <li><a class="dropdown-item" href="{{ url_for('main.index', view_mode='week', date_str=week.date_str) }}">Week {{ week.num }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-primary {% if view_mode == 'month' %}active{% endif %} dropdown-toggle" data-bs-toggle="dropdown">Month</button>
+            <ul class="dropdown-menu">
+                {% for month in months_in_year %}
+                <li><a class="dropdown-item" href="{{ url_for('main.index', view_mode='month', date_str=month.date_str) }}">{{ month.name }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="btn-group ms-3">
+        <a href="{{ url_for('main.index', view_mode='day', date_str=today_date_str) }}" class="btn btn-primary">Today</a>
+        <a href="{{ url_for('main.index', view_mode='week', date_str=today_date_str) }}" class="btn btn-primary">This Week</a>
+        <a href="{{ url_for('main.index', view_mode='month', date_str=today_date_str) }}" class="btn btn-primary">This Month</a>
+    </div>
+    
+    <button class="btn btn-outline-secondary ms-3" data-bs-toggle="offcanvas" data-bs-target="#summaryOffcanvas">
+        <i class="fa-solid fa-chart-pie me-1"></i>Summary
+    </button>
+    <button class="btn btn-outline-secondary ms-2" data-bs-toggle="offcanvas" data-bs-target="#logOffcanvas">
+        <i class="fa-solid fa-timeline me-1"></i>History
+    </button>
+  </div>
+</header>
+
+{% if view_mode == 'month' %}
+  {% include 'partials/_calendar_month_view.html' %}
+{% else %}
+<div class="row">
+  <div class="col-lg-12">
+    {% if view_mode == 'day' and day_stats %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body p-3">
+        <h6 class="card-title mb-2">Day Progress</h6>
+        <div style="height: 100px;"><canvas id="dayProgressChart"></canvas></div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="calendar-grid-container">
+      <div class="calendar-grid">
+        <div class="grid-header hour-col"></div>
+        {% for i in range(week_dates|length) %}
+          <div class="grid-header day-col">
+            {{ week_days_display[i][0] }} <small>{{ week_dates[i].strftime('%d/%m') }}</small>
+          </div>
+        {% endfor %}
+
+        <div class="allday-header">All Day</div>
+        {% for day in week_dates %}
+          {% set date_str = day.strftime('%Y-%m-%d') %}
+          <div class="allday-cell task-cell" data-date="{{ date_str }}" data-hour="">
+            {% set tasks_for_day = tasks_by_date.get(date_str, []) %}
+            {% for task in tasks_for_day %}
+              {% if task.hour is none %}
+				<div class="timed-task-item status-{{ task.status | lower | replace(' ', '-') }}"
+					 data-task-id="{{ task['id'] }}"
+					 data-task-json='{{ task | tojson | safe }}'>
+					<strong>{{ task['what'] }}</strong>
+					{% if task.who %}
+						<span class="text-muted small"> ({{ task.who }})</span>
+					{% endif %}
+				</div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endfor %}
+        
+        {% for hour in hours %}
+          <div class="hour-cell">{{ hour }}:00</div>
+          {% for day in week_dates %}
+            {% set date_str = day.strftime('%Y-%m-%d') %}
+            <div class="task-cell" data-date="{{ date_str }}" data-hour="{{ hour }}">
+              {% set tasks_for_day = tasks_by_date.get(date_str, []) %}
+              {% for task in tasks_for_day %}
+                {% if task.hour == hour %}
+                  <div class="timed-task-item status-{{ task.status | lower | replace(' ', '-') }}"
+					 data-task-id="{{ task['id'] }}"
+					 data-task-json='{{ task | tojson | safe }}'>
+					<strong>{{ task['what'] }}</strong>
+					{% if task.who %}
+						<span class="text-muted small"> ({{ task.who }})</span>
+					{% endif %}
+				</div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# History Offcanvas #}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="logOffcanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="fa-solid fa-timeline me-2"></i>History</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <ul class="list-group list-group-flush">
+      {% for log in logs %}
+      <li class="list-group-item">
+        <small class="text-muted">{{ log.timestamp | to_local_time }}</small>
+        <p class="mb-0">
+          {% if log.user %}<strong class="text-primary">{{ log.user.username }}</strong> {% endif %}
+          {{ log.action }}
+        </p>
+      </li>
+      {% else %}
+      <li class="list-group-item">No actions yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="summaryOffcanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="fa-solid fa-chart-pie me-2"></i>Work Summary</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6>Task Distribution by User</h6>
+            <button id="summary-chart-filter-reset" class="btn btn-sm btn-outline-secondary" style="display: none;">
+                <i class="fa-solid fa-xmark me-1"></i>Clear Filter
+            </button>
+        </div>
+        <div style="height: 250px;">
+            <canvas id="summaryChartCanvas"></canvas>
+        </div>
+    </div>
+    <hr>
+    <div id="summary-task-list-container">
+        {% for data in summary_data %}
+        <div class="card mb-3 summary-user-card" data-user-id="{{ data.user.id }}">
+            <div class="card-header bg-light py-2">
+                <h6 class="mb-0">
+                    <i class="fa-solid fa-user me-2"></i>
+                    {{ data.user.username }}
+                    <span class="badge bg-primary rounded-pill float-end">{{ data.task_count }} tasks</span>
+                </h6>
+            </div>
+            <ul class="list-group list-group-flush summary-task-list">
+                {% for task in data.tasks %}
+                <li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                    style="cursor: pointer;" data-task-json='{{ task | tojson | safe }}'>
+                    <div class="text-truncate">
+                        <span class="text-muted me-2 small">{{ task['task_date'] | format_date_short }}</span>
+                        <span class="{% if task['status'] == 'Done' %}text-decoration-line-through text-muted{% endif %}">
+                            {{ task['what'] }}
+                        </span>
+                    </div>
+                    <span class="badge rounded-pill ms-2 status-badge-{{ task['status'].lower().replace(' ', '-') }}">{{ task['status'] }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+        {% if not summary_data %}
+        <div class="text-center p-4">
+            <p class="text-muted">No assigned tasks found in this period.</p>
+        </div>
+        {% endif %}
+    </div>
+  </div>
+</div>
+
+{# Create/Edit Task Modal #}
+{% include 'partials/_task_modal.html' %}
+{# PASTE THIS CODE INTO index.html #}
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="taskDetailOffcanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="fa-solid fa-list-check me-2"></i>Job Detail</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body" id="taskDetailBody">
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+
+<script>
+  // Gán các biến toàn cục
+  window.CURRENT_USER_ID = "{{ current_user.id }}"; 
+  window.TASKS_BY_DATE = {{ tasks_by_date | tojson | safe if tasks_by_date else '{}' }};
+  window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
+  window.UPDATE_TASK_TIME_URL = "{{ url_for('main.update_task_time') }}";
+  window.DELETE_TASK_URL_BASE = "{{ url_for('main.delete_task', task_id=0) }}".replace('/0', '/');
+  window.DELETE_UPLOADED_FILE_URL_BASE = "{{ url_for('main.delete_uploaded_file', file_id=0) }}".replace('/0', '/');
+  window.UPLOAD_ATTACHMENT_URL = "{{ url_for('main.upload_attachment') }}";
+</script>
+
+<script>
+// Cấu trúc script chính, chỉ một DOMContentLoaded duy nhất
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Logic cho các bộ lọc (Date Picker & User Filter)
+    const dayPicker = document.getElementById('day-picker-input');
+    if (dayPicker) {
+        dayPicker.addEventListener('change', function(event) {
+            const selectedDate = event.target.value;
+            if (selectedDate) {
+                const url = new URL(window.location.href);
+                url.pathname = "{{ url_for('main.index', view_mode='day', date_str='_DATE_') }}".replace('_DATE_', selectedDate);
+                window.location.href = url.toString();
+            }
+        });
+    }
+
+    const userFilter = document.getElementById('user-filter-select');
+    if(userFilter) {
+        userFilter.addEventListener('change', function() {
+            const selectedUserId = this.value;
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('user_id', selectedUserId);
+            window.location.href = currentUrl.toString();
+        });
+    }
+
+    // --- 2. Logic cho biểu đồ Day Progress (chỉ chạy ở Day view) ---
+    {% if view_mode == 'day' and day_stats %}
+    const dayProgressCtx = document.getElementById('dayProgressChart');
+    if (dayProgressCtx) {
+      const dayStatsData = {{ day_stats | tojson }};
+      new Chart(dayProgressCtx, {
+        type: 'bar',
+        data: {
+          labels: ['Pending', 'In Progress', 'Review', 'Done', 'Drop'],
+          datasets: [{
+            label: 'Task Count',
+            data: [dayStatsData.Pending, dayStatsData['In Progress'], dayStatsData.Review, dayStatsData.Done, dayStatsData.Drop],
+            backgroundColor: ['#6c757d','#0d6efd','#6f42c1','#198754','#dc3545'],
+            borderRadius: 4, borderSkipped: false,
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { grid: { display: false } } } }
+      });
+    }
+    {% endif %}
+
+    // 3. Logic cho biểu đồ Summary (chỉ chạy khi có dữ liệu)
+    {% if summary_data %}
+    const summaryCtx = document.getElementById('summaryChartCanvas');
+    const summaryData = {{ summary_data | tojson | safe }};
+    const clearFilterBtn = document.getElementById('summary-chart-filter-reset');
+
+    if (summaryCtx && summaryData && summaryData.length > 0) {
+        const labels = summaryData.map(d => d.user.username);
+        const statuses = ['Pending', 'In Progress', 'Review', 'Done', 'Drop'];
+        const statusColors = {'Pending': '#6c757d', 'In Progress': '#0d6efd', 'Review': '#6f42c1', 'Done': '#198754', 'Drop': '#dc3545'};
+        const datasets = statuses.map(status => ({
+            label: status,
+            data: summaryData.map(d => d.status_counts[status] || 0),
+            backgroundColor: statusColors[status],
+        }));
+
+        const filterSummaryList = (clickedUser, clickedStatus) => {
+            document.querySelectorAll('.summary-user-card').forEach(card => {
+                if (card.dataset.userId == clickedUser.id) {
+                    card.style.display = 'block';
+                    card.querySelectorAll('.list-group-item').forEach(taskLi => {
+                        const taskData = JSON.parse(taskLi.dataset.taskJson);
+                        taskLi.style.display = (taskData.status === clickedStatus) ? 'flex' : 'none';
+                    });
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            clearFilterBtn.style.display = 'inline-block';
+        };
+
+        const resetSummaryFilter = () => {
+            document.querySelectorAll('.summary-user-card').forEach(card => card.style.display = 'block');
+            document.querySelectorAll('.summary-user-card .list-group-item').forEach(taskLi => taskLi.style.display = 'flex');
+            clearFilterBtn.style.display = 'none';
+        };
+
+        const summaryChart = new Chart(summaryCtx, {
+            type: 'bar',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const userIndex = elements[0].index;
+                        const statusIndex = elements[0].datasetIndex;
+                        const clickedUser = summaryData[userIndex].user;
+                        const clickedStatus = statuses[statusIndex];
+                        filterSummaryList(clickedUser, clickedStatus);
+                    } else {
+                        resetSummaryFilter(); // Reset khi click ra ngoài
+                    }
+                },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+        clearFilterBtn.addEventListener('click', resetSummaryFilter);
+    }
+    {% endif %}
+});
+</script>
+
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+{% endblock %}

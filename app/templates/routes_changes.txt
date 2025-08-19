@@ -1,0 +1,13 @@
+--- ROUTES CHANGES SUMMARY ---
+
+1) /projects (filter by status) + update project status + create with status
+- Update existing 'projects_list' to accept ?status=
+- New route 'update_project' (POST) to update a project's status
+- Update 'add_project' to accept initial status
+
+2) /uploads-manager pagination + sorting
+- Accept query params: q, sort_by, order, page, per_page
+- Use SQLAlchemy paginate() and dynamic order_by with whitelist
+- Template receives 'files' pagination object and sorting context
+
+Copy the following Python code blocks into your app/routes.py, replacing the existing functions with the same names.

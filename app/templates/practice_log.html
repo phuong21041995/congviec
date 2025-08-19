@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Quán Tâm{% endblock %}
+
+{% block styles %}
+<style>
+
+  .card{border-radius:24px}
+  .streak-number{font-size:56px;font-weight:800}
+  .text-muted-sm{color:#6b7280;font-size:.9rem}
+
+  /* Calendar */
+  #practiceCalendar .calendar-day{
+    position:relative;height:40px;display:flex;align-items:center;justify-content:center;
+    border-radius:10px;cursor:pointer;transition:background-color .2s ease;
+  }
+  #practiceCalendar .calendar-day:hover{background:#eef2ff}
+  #practiceCalendar .calendar-day.selected{outline:2px solid #2563eb;box-shadow:inset 0 0 0 1px #2563eb}
+  .calendar-leaf{position:absolute;right:6px;top:4px;font-size:.9rem;color:#22c55e}
+
+  /* Heatmap */
+  .calendar-day.heat-1{background:rgba(34,197,94,.10)}
+  .calendar-day.heat-2{background:rgba(34,197,94,.18)}
+  .calendar-day.heat-3{background:rgba(34,197,94,.28)}
+  .calendar-day.heat-4{background:rgba(34,197,94,.38)}
+  .calendar-day.heat-5{background:rgba(34,197,94,.50)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- LEFT -->
+  <div class="col-xl-5">
+    <!-- streak -->
+    <div class="card">
+      <div class="card-body d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fa-solid fa-fire text-danger-emphasis"></i>
+          <h5 class="mb-0">Chuỗi ngày thực hành</h5>
+        </div>
+        <div class="streak-number">{{ streak }}</div>
+      </div>
+      <div class="px-3 pb-3 text-muted-sm">A Di Đà Phật. Tinh tấn lên!</div>
+    </div>
+
+    <!-- calendar -->
+    <div class="card mt-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="fa-regular fa-calendar-days me-2"></i>Lịch Quán Chiếu</span>
+        <div class="d-flex align-items-center gap-2">
+          <button id="prevMonth" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chevron-left"></i></button>
+          <span id="cal-month-year" class="fw-semibold"></span>
+          <button id="nextMonth" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="practiceCalendar"></div>
+      </div>
+    </div>
+
+    <!-- recent -->
+    <div class="card mt-3">
+      <div class="card-header">Các Ghi nhận Mới nhất</div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <select id="filterTag" class="form-select" style="width:auto">
+            <option value="">Tất cả tag</option>
+            <option>Tham</option><option>Sân</option><option>Si</option><option>Chánh niệm</option>
+          </select>
+          <select id="filterDoor" class="form-select" style="width:auto">
+            <option value="">Tất cả cửa</option>
+            <option>Ý</option><option>Tai</option><option>Mắt</option><option>Mũi</option><option>Lưỡi</option><option>Thân</option>
+          </select>
+          <select id="filterTime" class="form-select" style="width:auto">
+            <option value="">Bất kỳ giờ</option>
+            <option value="sang">Sáng (05–10:59)</option>
+            <option value="chieu">Chiều (11–16:59)</option>
+            <option value="toi">Tối (17–20:59)</option>
+            <option value="khuya">Khuya (21–04:59)</option>
+          </select>
+          <button id="btnExportCSV" class="btn btn-sm btn-outline-secondary">Export CSV (tháng)</button>
+        </div>
+        <div id="recentLogsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: charts -->
+  <div class="col-xl-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Biểu đồ Tổng quan</span>
+        <div class="btn-group" role="group" aria-label="Timespan">
+          <input type="radio" class="btn-check" name="spanDays" id="span7" value="7">
+          <label class="btn btn-outline-secondary btn-sm" for="span7">7 ngày</label>
+          <input type="radio" class="btn-check" name="spanDays" id="span30" value="30" checked>
+          <label class="btn btn-outline-secondary btn-sm" for="span30">30 ngày</label>
+          <input type="radio" class="btn-check" name="spanDays" id="span90" value="90">
+          <label class="btn btn-outline-secondary btn-sm" for="span90">90 ngày</label>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-2">
+          <h6 class="m-0">Xu hướng theo Tag</h6>
+          <div>
+            <div class="form-check form-check-inline"><input class="form-check-input chart-tag-toggle" type="checkbox" value="Tham" id="tgTham" checked><label class="form-check-label" for="tgTham"><span class="badge bg-warning text-dark">Tham</span></label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input chart-tag-toggle" type="checkbox" value="Sân" id="tgSan" checked><label class="form-check-label" for="tgSan"><span class="badge bg-danger">Sân</span></label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input chart-tag-toggle" type="checkbox" value="Si" id="tgSi" checked><label class="form-check-label" for="tgSi"><span class="badge bg-primary">Si</span></label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input chart-tag-toggle" type="checkbox" value="Chánh niệm" id="tgMind" checked><label class="form-check-label" for="tgMind"><span class="badge bg-success">Chánh niệm</span></label></div>
+          </div>
+        </div>
+        <canvas id="trendChart" height="100"></canvas>
+        <hr>
+        <h6 class="text-center">Đếm theo tag hôm nay</h6>
+        <canvas id="barToday" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Offcanvas: Day Inspector -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="dayInspector" aria-labelledby="dayInspectorLabel" style="width:430px;max-width:100%">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="dayInspectorLabel">
+      <i class="fa-regular fa-calendar-day me-2"></i><span id="inspectorDateLabel"></span>
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="text-muted-sm">Tổng: <span id="inspectorTotal">0</span></div>
+      <button id="btnAddForDay" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>Thêm ghi nhận ngày này</button>
+    </div>
+    <div id="inspectorTagCounts" class="mb-2 text-muted-sm"></div>
+    <div id="inspectorList" class="list-group"></div>
+  </div>
+</div>
+
+<!-- Modal: Quán chiếu sâu -->
+<div class="modal fade" id="deepModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Quán chiếu sâu theo Kinh Sáu Sáu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="deepLogForm">
+          <div class="row g-3">
+            <!-- GĐ1 -->
+            <div class="col-lg-6">
+              <h6 class="text-primary fw-semibold mb-2">Giai đoạn 1: Ghi nhận Sự việc</h6>
+              <label class="form-label">Thời điểm ghi nhận</label>
+              <input id="logDateTimeDisplay" class="form-control" disabled>
+              <label class="form-label mt-3">Tình huống chi tiết</label>
+              <textarea name="situation" rows="12" class="form-control" placeholder="Đã xảy ra điều gì?"></textarea>
+            </div>
+            <!-- GĐ2 -->
+            <div class="col-lg-6">
+              <h6 class="text-primary fw-semibold mb-2">Giai đoạn 2: Bóc tách Tiến trình tâm</h6>
+              <label class="form-label">Cửa giác quan</label>
+              <select id="senseDoorSelect" class="form-select">
+                <option>Ý</option><option>Tai</option><option>Mắt</option><option>Mũi</option><option>Lưỡi</option><option>Thân</option>
+              </select>
+              <div class="mt-2">
+                <label class="form-label d-block">Cảm giác (Thọ)</label>
+                <div class="btn-group" role="group">
+                  <input class="btn-check" type="radio" name="feeling_global" id="f1" value="Lạc thọ"><label class="btn btn-sm btn-outline-success" for="f1">Lạc thọ</label>
+                  <input class="btn-check" type="radio" name="feeling_global" id="f2" value="Khổ thọ"><label class="btn btn-sm btn-outline-danger" for="f2">Khổ thọ</label>
+                  <input class="btn-check" type="radio" name="feeling_global" id="f3" value="Xả thọ"><label class="btn btn-sm btn-outline-secondary" for="f3">Xả thọ</label>
+                </div>
+              </div>
+              <div class="mt-2">
+                <label class="form-label d-block">Phản ứng</label>
+                <div class="btn-group" role="group">
+                  <input class="btn-check" type="radio" name="reaction" id="r1" value="Tham ái"><label class="btn btn-sm btn-outline-warning" for="r1">Tham ái</label>
+                  <input class="btn-check" type="radio" name="reaction" id="r2" value="Sân ái"><label class="btn btn-sm btn-outline-danger" for="r2">Sân ái</label>
+                  <input class="btn-check" type="radio" name="reaction" id="r3" value="Si ái"><label class="btn btn-sm btn-outline-primary" for="r3">Si ái</label>
+                  <input class="btn-check" type="radio" name="reaction" id="r4" value="Chánh niệm"><label class="btn btn-sm btn-outline-success" for="r4">Chánh niệm</label>
+                </div>
+              </div>
+              <div class="mt-2">
+                <label class="form-label">Đối tượng (Trần)</label>
+                <input id="senseObjectUnified" class="form-control" placeholder="Suy nghĩ, kế hoạch, ký ức..."/>
+              </div>
+              <div class="row g-3 my-2">
+                <div class="col-6">
+                  <label class="form-label small">Mức độ (1–5)</label>
+                  <input id="intensityRange" type="range" class="form-range" min="1" max="5" step="1" value="3"/>
+                  <div><span id="intensityValue" class="badge bg-secondary">3</span></div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Thời lượng (phút)</label>
+                  <input id="durationMin" type="number" class="form-control" min="0" step="1" placeholder="VD: 10"/>
+                </div>
+              </div>
+              <div class="d-flex gap-2 mb-2">
+                <button type="button" id="suggestContemplation" class="btn btn-sm btn-outline-primary">Gợi ý Quán chiếu</button>
+                <button type="button" id="suggestOutcome" class="btn btn-sm btn-outline-success">Gợi ý Kết quả</button>
+              </div>
+            </div>
+          </div>
+          <!-- GĐ3 -->
+          <div class="row g-3 mt-1">
+            <div class="col-12">
+              <h6 class="text-primary fw-semibold mb-2">Giai đoạn 3: Quán chiếu & Chuyển hóa</h6>
+              <label class="form-label">Quán chiếu "Vô ngã"</label>
+              <textarea id="contemplation" name="contemplation" class="form-control" rows="7" placeholder="Quan sát, quán chiếu..."></textarea>
+              <label class="form-label mt-3">Kết quả / Sự chuyển hóa</label>
+              <textarea id="outcome" name="outcome" class="form-control" rows="6" placeholder="Tâm/Thân có gì thay đổi?"></textarea>
+            </div>
+          </div>
+
+          <!-- hidden -->
+          <input type="hidden" name="log_id" id="logIdInput">
+          <input type="hidden" name="log_date" id="logDateInput">
+          <input type="hidden" name="log_time" id="logTimeInput">
+          <input type="hidden" name="sense_door" id="senseDoorInput">
+          <input type="hidden" name="sense_object" id="senseObjectInput">
+          <input type="hidden" name="feeling" id="feelingInput">
+          <input type="hidden" name="craving" id="cravingInput">
+          <input type="hidden" name="tag" id="logTagInput">
+          <input type="hidden" name="intensity" id="intensityInput">
+          <input type="hidden" name="duration_min" id="durationInput">
+          <div class="row g-2 mt-2">
+            <div class="col-md-6">
+              <label class="form-label">Giờ (VN) khi tạo mới</label>
+              <input id="logTimeVN" type="time" class="form-control">
+            </div>
+            <div class="col-md-6 d-flex align-items-end"><div class="text-muted-sm">Khi chỉnh sửa, thời gian gốc được giữ nguyên.</div></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        <button id="btnDelete" class="btn btn-danger" style="display:none">Xóa</button>
+        <button id="btnSave" class="btn btn-primary">Lưu Quán chiếu</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+/* ===================== CONFIG & HELPERS ===================== */
+const API = {
+  chart:'/api/practice-log/chart-data',
+  cal:'/api/practice-log/calendar-view',
+  byDate:'/api/practice-log/by-date',
+  recent:'/api/practice-log/recent-logs',
+  save:'/api/practice-log/save',
+  log:(id)=>`/api/practice-log/${id}`,
+  del:(id)=>`/api/practice-log/${id}`
+};
+const formatVNDate = (iso)=>{const [y,m,d]=iso.split('-').map(Number);return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;}
+const bucket=(hm)=>{if(!hm)return'';const[h,m]=hm.split(':').map(Number);const t=(h%24)*60+m; if(t>=300&&t<660)return'sang'; if(t>=660&&t<1020)return'chieu'; if(t>=1020&&t<1260)return'toi'; return'khuya';}
+const waitChart=(cb)=>{ if (window.Chart) return cb(); const it=setInterval(()=>{if(window.Chart){clearInterval(it);cb();}},120); setTimeout(()=>clearInterval(it),5000); }
+
+/* ===================== OFFCANVAS ===================== */
+const inspectorEl = document.getElementById('dayInspector');
+const dayInspector = inspectorEl ? new bootstrap.Offcanvas(inspectorEl) : null;
+
+/* ===================== CALENDAR ===================== */
+let currentYear, currentMonth, selectedDate=null;
+
+function buildCalendarUI(year,month){
+  const first=new Date(year,month-1,1), last=new Date(year,month,0);
+  const start=(first.getDay()+6)%7, total=last.getDate(), weeks=Math.ceil((start+total)/7);
+  let day=1-start, html=`<table class="table table-borderless mb-0"><thead><tr class="text-center text-muted">`;
+  ['T2','T3','T4','T5','T6','T7','CN'].forEach(d=>html+=`<th>${d}</th>`); html+=`</tr></thead><tbody>`;
+  for(let w=0;w<weeks;w++){ html+='<tr>';
+    for(let i=0;i<7;i++,day++){
+      if(day<1||day>total) html+='<td></td>';
+      else{ const ds=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            html+=`<td><div class="calendar-day" data-date="${ds}">${day}</div></td>`; }
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  document.getElementById('practiceCalendar').innerHTML=html;
+  document.getElementById('cal-month-year').textContent=`Tháng ${month}/${year}`;
+  document.querySelectorAll('#practiceCalendar .calendar-day[data-date]').forEach(el=>el.addEventListener('click',()=>selectDay(el.dataset.date)));
+}
+
+async function renderCalendar(year,month){
+  currentYear=year; currentMonth=month; buildCalendarUI(year,month);
+  try{
+    const res=await fetch(`${API.cal}?year=${year}&month=${month}`); const js=await res.json();
+    const logged=new Set(js.logged_dates||[]), counts=new Map(Object.entries(js.counts_by_date||{}));
+    let max=0; counts.forEach(v=>{v=parseInt(v,10)||0; if(v>max)max=v;});
+    document.querySelectorAll('#practiceCalendar .calendar-day[data-date]').forEach(el=>{
+      const date=el.dataset.date;
+      el.className='calendar-day'; // reset
+      const leaf=el.querySelector('.calendar-leaf'); if(leaf) leaf.remove();
+      if(logged.has(date)) el.insertAdjacentHTML('beforeend','<i class="fa-solid fa-leaf calendar-leaf"></i>');
+      if(max>0 && counts.has(date)){
+        const c=parseInt(counts.get(date),10)||0; const lv=Math.max(1,Math.min(5,Math.ceil((c/max)*5)));
+        el.classList.add(`heat-${lv}`);
+      }
+    });
+  }catch(e){ console.warn('calendar heatmap', e); }
+}
+
+async function selectDay(ds){
+  selectedDate=ds;
+  document.querySelectorAll('#practiceCalendar .calendar-day.selected').forEach(el=>el.classList.remove('selected'));
+  const hit=document.querySelector(`#practiceCalendar .calendar-day[data-date="${ds}"]`); if(hit) hit.classList.add('selected');
+  document.getElementById('inspectorDateLabel').textContent = formatVNDate(ds);
+  await loadLogsForDay(ds);
+  dayInspector && dayInspector.show();
+}
+
+async function loadLogsForDay(ds){
+  const list=document.getElementById('inspectorList'), cEl=document.getElementById('inspectorTagCounts'), tEl=document.getElementById('inspectorTotal');
+  list.innerHTML='Đang tải...';
+  try{
+    const r=await fetch(`${API.byDate}?date=${ds}`); const js=await r.json();
+    list.innerHTML=''; cEl.textContent=''; let total=0; const counts={};
+    if(js&&js.success){
+      (js.logs||[]).forEach(l=>{
+        total++; const tag=(l.tag||'').trim()||'-'; counts[tag]=(counts[tag]||0)+1;
+        const time=(l.log_time_vn||'').slice(0,5)||(l.log_ts||'').slice(11,16);
+        const item=document.createElement('div');
+        item.className='list-group-item d-flex justify-content-between align-items-start';
+        item.innerHTML=`<div>
+            <div><span class="badge rounded-pill text-bg-secondary me-2">${time||'--:--'}</span><strong>${tag}</strong></div>
+            <div class="text-muted-sm">${l.sense_door||''}</div>
+            <div>${l.note||''}</div>
+          </div>
+          <div class="ms-2"><button class="btn btn-sm btn-outline-primary"><i class="fa-regular fa-pen-to-square me-1"></i>Sửa</button></div>`;
+        item.querySelector('button').addEventListener('click',()=>openEditModal(l.id));
+        list.appendChild(item);
+      });
+    }
+    tEl.textContent=total;
+    cEl.textContent = total ? Object.entries(counts).map(([k,v])=>`${k}: ${v}`).join(' · ') : 'Chưa có ghi nhận trong ngày.';
+  }catch(e){ console.warn('load day', e); list.innerHTML='<div class="text-danger">Lỗi kết nối.</div>'; }
+}
+
+document.getElementById('btnAddForDay').addEventListener('click',()=>openNewModal(selectedDate||new Date().toISOString().slice(0,10)));
+document.getElementById('prevMonth').addEventListener('click',async()=>{let y=currentYear,m=currentMonth-1;if(m<1){m=12;y--}await renderCalendar(y,m);});
+document.getElementById('nextMonth').addEventListener('click',async()=>{let y=currentYear,m=currentMonth+1;if(m>12){m=1;y++}await renderCalendar(y,m);});
+
+/* ===================== CHARTS ===================== */
+let trendChart, barTodayChart;
+const TAG_CFG={'Tham':'#ffc107','Sân':'#dc3545','Si':'#0d6efd','Chánh niệm':'#198754'};
+
+function drawTrend(trend){
+  const cvs=document.getElementById('trendChart'), ctx=cvs.getContext('2d');
+  const dates=[...new Set(trend.map(r=>r.date))].sort();
+  if(trendChart) trendChart.destroy();
+  if(dates.length===0){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    ctx.font='14px system-ui,-apple-system,Segoe UI,Roboto'; ctx.fillStyle='#6b7280'; ctx.textAlign='center';
+    ctx.fillText('Chưa có dữ liệu trong khoảng đã chọn', cvs.width/2, cvs.height/2); return;
+  }
+  const datasets=Object.keys(TAG_CFG).map(tag=>{
+    const data=dates.map(d=>{const rec=trend.find(r=>r.date===d && r.tag===tag); return rec?Number(rec.count):0;});
+    return {label:tag,data,borderColor:TAG_CFG[tag],backgroundColor:TAG_CFG[tag]+'33',borderWidth:2,tension:.3,fill:false};
+  });
+  trendChart=new Chart(cvs,{type:'line',data:{labels:dates,datasets},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+}
+function drawBarToday(today){
+  const labels=Object.keys(TAG_CFG), data=labels.map(k=>Number(today?.[k]||0)), colors=labels.map(k=>TAG_CFG[k]);
+  if(barTodayChart) barTodayChart.destroy();
+  barTodayChart=new Chart(document.getElementById('barToday'),{type:'bar',data:{labels,datasets:[{label:'Số log',data,backgroundColor:colors,borderWidth:1}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+async function refreshCharts(days){
+  try{const r=await fetch(`${API.chart}?days=${days}`); const js=await r.json(); drawTrend(js.trend_data||[]); drawBarToday(js.today_pie_data||{});}catch(e){console.warn('charts',e);}
+}
+Array.from(document.querySelectorAll('input[name="spanDays"]')).forEach(r=>r.addEventListener('change',()=>{const d=parseInt(document.querySelector('input[name="spanDays"]:checked').value,10)||30; waitChart(()=>refreshCharts(d));}));
+Array.from(document.querySelectorAll('.chart-tag-toggle')).forEach(cb=>cb.addEventListener('change',()=>{ if(!trendChart)return; const i=trendChart.data.datasets.findIndex(ds=>ds.label===cb.value); if(i>=0){trendChart.data.datasets[i].hidden=!cb.checked; trendChart.update();}}));
+
+/* ===================== RECENT ===================== */
+let allRecentLogs=[];
+async function fetchRecent(){ try{const r=await fetch(API.recent); const js=await r.json(); if(js.success){allRecentLogs=js.logs||[]; renderRecent();}}catch(e){console.warn('recent',e);}}
+function renderRecent(){
+  const tag=document.getElementById('filterTag').value, door=document.getElementById('filterDoor').value, tod=document.getElementById('filterTime').value;
+  const list=document.getElementById('recentLogsList');
+  const rows=allRecentLogs.filter(l=>{
+    const okTag=!tag||(l.tag||'').trim()===tag; const okDoor=!door||(l.sense_door||'').startsWith(door);
+    const hm=(l.log_time_vn||'').slice(0,5); const okTOD=!tod||bucket(hm)===tod; return okTag&&okDoor&&okTOD;
+  }).map(l=>`<div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+      <div><strong>${(l.tag||'-').trim()}</strong>: ${l.note||''}</div>
+      <a href="#" class="text-muted-sm" data-open-day="${(l.log_ts||'').slice(0,10)}">${l.log_time_vn||''}</a>
+    </div>`).join('');
+  list.innerHTML = rows || '<div class="text-muted text-center py-3">Không có ghi nhận nào phù hợp.</div>';
+  list.querySelectorAll('[data-open-day]').forEach(a=>a.addEventListener('click',(e)=>{e.preventDefault(); const ds=a.getAttribute('data-open-day'); if(ds) selectDay(ds);}));
+}
+['filterTag','filterDoor','filterTime'].forEach(id=>document.getElementById(id).addEventListener('change',renderRecent));
+
+/* ===================== MODAL CRUD ===================== */
+const modalEl=document.getElementById('deepModal'); const modal=new bootstrap.Modal(modalEl); const form=document.getElementById('deepLogForm');
+
+function openNewModal(date){
+  form.reset(); ['reaction','feeling_global'].forEach(n=>document.querySelectorAll(`input[name="${n}"]`).forEach(r=>r.checked=false));
+  ['logIdInput','senseObjectInput','feelingInput','cravingInput','logTagInput','contemplation','outcome'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  document.getElementById('senseDoorSelect').value='Ý'; document.getElementById('senseDoorInput').value='Ý'; document.getElementById('logDateInput').value=date;
+  const n=new Date(); const hh=String(n.getHours()).padStart(2,'0'), mm=String(n.getMinutes()).padStart(2,'0'); const t=`${hh}:${mm}`;
+  document.getElementById('logTimeVN').value=t; document.getElementById('logTimeInput').value=t; document.getElementById('logDateTimeDisplay').value=`${formatVNDate(date)} ${t}`;
+  document.getElementById('btnDelete').style.display='none'; modal.show();
+}
+async function openEditModal(id){
+  try{ const r=await fetch(API.log(id)); const js=await r.json(); if(!js.success){showToast('Lỗi','Không thể tải dữ liệu.','danger');return;}
+    const l=js.log; form.reset();
+    document.getElementById('logDateTimeDisplay').value=`${formatVNDate(l.log_date)} ${l.log_time_vn}`;
+    document.querySelector('[name="situation"]').value=l.situation||''; document.getElementById('senseObjectUnified').value=l.sense_object||'';
+    document.getElementById('senseDoorSelect').value=(l.sense_door||'Ý'); document.getElementById('senseDoorInput').value=(l.sense_door||'Ý');
+    const fm={'Lạc thọ':'f1','Khổ thọ':'f2','Xả thọ':'f3'}; if(fm[l.feeling||'']) document.getElementById(fm[l.feeling]).checked=true;
+    const rm={'Tham ái':'r1','Sân ái':'r2','Si ái':'r3','Chánh niệm':'r4'}; const rx=(l.craving&&l.craving.includes('ái'))?l.craving:(l.tag||''); if(rm[rx]) document.getElementById(rm[rx]).checked=true;
+    document.getElementById('contemplation').value=l.contemplation||''; document.getElementById('outcome').value=l.outcome||'';
+    document.getElementById('logIdInput').value=l.id; document.getElementById('btnDelete').style.display='inline-block'; modal.show();
+  }catch(e){console.warn('openEdit',e); showToast('Lỗi','Không thể kết nối đến máy chủ.','danger');}
+}
+document.getElementById('btnDelete').addEventListener('click',async()=>{
+  const id=document.getElementById('logIdInput').value; if(!id||!confirm('Bạn chắc muốn xóa?')) return;
+  try{ const r=await fetch(API.del(id),{method:'DELETE'}); const js=await r.json();
+    if(js.success){ modal.hide(); showToast('Thành công','Đã xóa ghi nhận.','success'); if(selectedDate) await loadLogsForDay(selectedDate); await initializePage();}
+    else showToast('Lỗi','Không xóa được.','danger');
+  }catch(e){ showToast('Lỗi','Không thể kết nối đến máy chủ.','danger');}
+});
+document.getElementById('btnSave').addEventListener('click',async()=>{
+  const rx=(document.querySelector('input[name="reaction"]:checked')||{}).value||''; if(!rx){showToast('Thiếu dữ liệu','Chọn **Phản ứng**.','warning');return;}
+  document.getElementById('senseDoorInput').value=document.getElementById('senseDoorSelect').value;
+  document.getElementById('senseObjectInput').value=(document.getElementById('senseObjectUnified').value||'').trim();
+  document.getElementById('feelingInput').value=(document.querySelector('input[name="feeling_global"]:checked')||{}).value||'';
+  if(rx==='Chánh niệm'){ document.getElementById('cravingInput').value=''; document.getElementById('logTagInput').value='Chánh niệm'; }
+  else{ document.getElementById('cravingInput').value=rx; document.getElementById('logTagInput').value=''; }
+  document.getElementById('intensityInput').value=document.getElementById('intensityRange').value||'';
+  document.getElementById('durationInput').value=document.getElementById('durationMin').value||'';
+  const fd=new FormData(form);
+  fd.set('log_date', document.getElementById('logDateInput').value || (selectedDate||new Date().toISOString().slice(0,10)));
+  fd.set('log_time', document.getElementById('logTimeInput').value || document.getElementById('logTimeVN').value || '00:00');
+  try{ const r=await fetch(API.save,{method:'POST',body:fd}); const js=await r.json();
+    if(js.success){ modal.hide(); showToast('Thành công','Đã lưu lại quán chiếu.','success'); if(selectedDate) await loadLogsForDay(selectedDate); await initializePage();}
+    else showToast('Lỗi', js.message||'Không thể lưu.','danger');
+  }catch(e){ showToast('Lỗi','Không thể kết nối đến máy chủ.','danger');}
+});
+document.getElementById('logTimeVN').addEventListener('input',(e)=>{document.getElementById('logTimeInput').value=e.target.value; if(selectedDate){document.getElementById('logDateTimeDisplay').value=`${formatVNDate(selectedDate)} ${e.target.value}`;}});
+document.getElementById('intensityRange').addEventListener('input',(e)=>{document.getElementById('intensityValue').textContent=e.target.value;});
+document.getElementById('suggestContemplation').addEventListener('click',()=>{
+  const v=(document.querySelector('input[name="reaction"]:checked')||{}).value||'Chánh niệm';
+  const picks={ 'Tham':['Quán vô thường của đối tượng đang ưa thích; biết tâm muốn nắm giữ.','Buông xả 3 hơi thở chậm, ghi nhận “đang tham—biết tham”.'],
+                'Sân':['Quán từ bi cho mình & đối tượng; nhận diện nóng trong thân.','Dừng–thở–mềm vai; ghi nhận “đang sân—biết sân”.'],
+                'Si':['Quán thân–thọ–tâm–pháp; hỏi “mục đích việc này là gì?”','Viết 1–2 dòng làm rõ ý định trước hành động.'],
+                'Chánh niệm':['Biết rõ toàn thân & hơi thở, thư giãn cảm giác.'] }[v.includes('ái')?v.replace(' ái',''):v]||['Quan sát hơi thở.'];
+  const el=document.getElementById('contemplation'); el.value=(el.value?el.value+'\n':'')+picks[Math.floor(Math.random()*picks.length)];
+});
+document.getElementById('suggestOutcome').addEventListener('click',()=>{
+  const v=(document.querySelector('input[name="reaction"]:checked')||{}).value||'Chánh niệm';
+  const picks={ 'Tham':['Tham giảm độ bám; thân nhẹ hơn.','Bớt kéo dài vòng lặp muốn–thất vọng.'],
+                'Sân':['Bực giảm; giao tiếp ôn hòa hơn.','Chuyển chú ý về cảm thọ trong thân.'],
+                'Si':['Rõ mục tiêu; tập trung hơn.','Nhận ra sa đà, quay lại việc chính.'],
+                'Chánh niệm':['Tâm vững & sáng.'] }[v.includes('ái')?v.replace(' ái',''):v]||['Nhẹ hơn, tỉnh hơn.'];
+  const el=document.getElementById('outcome'); el.value=(el.value?el.value+'\n':'')+picks[Math.floor(Math.random()*picks.length)];
+});
+
+/* ===================== INIT ===================== */
+async function initializePage(){
+  const now=new Date(); await renderCalendar(currentYear||now.getFullYear(), currentMonth||now.getMonth()+1);
+  waitChart(()=>refreshCharts(parseInt(document.querySelector('input[name="spanDays"]:checked')?.value||'30',10)));
+  await fetchRecent();
+}
+initializePage();
+});
+</script>
+{% endblock %}

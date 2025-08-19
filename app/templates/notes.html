@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}Note{% endblock %}
+
+{% block styles %}
+<style>
+    .note-content img {
+		max-width: 100%;
+		height: auto;
+		border-radius: 6px;
+		margin-top: 10px;
+	}
+	/* File: templates/notes.html -> trong thẻ <style> */
+
+	.note-card {
+		background-color: #fff;
+		border: 1px solid #adb5bd;
+		border-radius: .5rem;
+		padding: 1rem;
+		margin-bottom: 15px;
+		cursor: grab;
+		/* Tăng cường hiệu ứng bóng đổ để "nổi" hơn */
+		box-shadow: 0 4px 6px rgba(0,0,0,0.1);transition: all 0.2s ease-in-out;
+		transition: all 0.2s ease-in-out; /* Làm chuyển động mượt hơn */
+	}
+
+	.note-card:hover { box-shadow: 0 10px 20px rgba(0,0,0,0.15);transform: translateY(-2px) translateZ(0);}
+	}
+    .padlet-board { display: flex; gap: 15px; padding: 15px; background-color: #f0f2f5; overflow-x: auto; height: 100%; align-items: stretch; }
+    .padlet-column { flex-shrink: 0; width: 300px; background-color: #e9ecef; border-radius: 8px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    #.note-card { background-color: #dee2e6; border: 1px solid #adb5bd; border-radius: .5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 1rem; margin-bottom: 15px; transition: box-shadow 0.2s ease; cursor: grab; }
+    #.note-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .note-card h5 { font-weight: bold; margin-bottom: 0.5rem; word-break: break-all; }
+    .note-card .note-content { color: #6c757d; font-size: 0.9rem; min-height: 50px; word-break: break-all; }
+    .note-card .note-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; border-top: 1px solid #f1f3f5; padding-top: 1rem; }
+    
+    /* --- BẮT ĐẦU PHẦN CSS MỚI --- */
+
+    /* Yêu cầu 4: Giao diện mới cho header của cột */
+    .column-header {
+        display: flex;
+        align-items: center; /* Căn giữa theo chiều dọc */
+        margin-bottom: 15px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        color: white;
+        font-size: 1.1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Thêm bóng đổ */
+    }
+    .column-title {
+        flex-grow: 1; /* Cho phép title chiếm hết không gian */
+        font-weight: bold;
+        cursor: pointer; /* Đổi con trỏ khi di chuột vào để biết có thể sửa */
+    }
+    .delete-column-btn {
+        background: rgba(255,255,255,0.2); /* Nền mờ cho nút xóa */
+        border: none;
+        color: white;
+        opacity: 0.6;
+        transition: opacity 0.2s ease;
+    }
+    .delete-column-btn:hover {
+        opacity: 1;
+        color: white;
+        background: rgba(255,255,255,0.3);
+    }
+
+    /* Yêu cầu 1: Bảng màu mới "bỏng bẩy" hơn và bỏ màu cũ */
+    .padlet-column:nth-child(6n + 1) .column-header { background: linear-gradient(45deg, #ff006e, #8338ec); }
+    .padlet-column:nth-child(6n + 2) .column-header { background: linear-gradient(45deg, #0077b6, #00b4d8); }
+    .padlet-column:nth-child(6n + 3) .column-header { background: linear-gradient(45deg, #fca311, #ffc300); }
+    .padlet-column:nth-child(6n + 4) .column-header { background: linear-gradient(45deg, #2a9d8f, #20bf55); }
+    .padlet-column:nth-child(6n + 5) .column-header { background: linear-gradient(45deg, #6a4c93, #9d4edd); }
+    .padlet-column:nth-child(6n + 6) .column-header { background: linear-gradient(45deg, #d90429, #ef233c); }
+
+    /* --- CSS CHO KÉO THẢ (giữ nguyên) --- */
+    .note-cards-container { min-height: 150px; border-radius: 5px; transition: background-color 0.2s ease; flex-grow: 1; }
+    .sortable-dragover { background-color: #d8e2ef; }
+    .sortable-ghost { background: #e9f2ff; border: 2px dashed #a0c4ff; opacity: 0.7; }
+    .sortable-drag {opacity: 0.95;transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="m-0"><i class="fa-solid fa-note-sticky me-2"></i>Note</h2>
+    <div>
+        <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createColumnModal"><i class="fa-solid fa-plus me-2"></i>Create new column</button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createNoteModal"><i class="fa-solid fa-plus me-2"></i>Create new note</button>
+    </div>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="padlet-board">
+    {% for column in all_columns %}
+    <div class="padlet-column" data-column-name="{{ column.name }}" data-column-id="{{ column.id }}">
+        <div class="column-header">
+            <h4 class="column-title">{{ column.name }}</h4>
+            <button class="btn btn-sm btn-outline-danger delete-column-btn" data-column-id="{{ column.id }}" title="Delete column">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="note-cards-container" id="notes-{{ column.id }}">
+            {% for note in notes_by_column_id[column.id] %}
+            <div class="note-card" data-note-id="{{ note.id }}">
+                <div class="note-header"><h5 class="card-title">{{ note.title }}</h5></div>
+                <div class="note-content">{{ note.content | safe }}</div>
+				<div class="note-footer">
+					<small class="text-muted">
+						{% if note.creator %}{{ note.creator.username }} - {% endif %}{{ note.timestamp | to_local_time }}
+						
+					</small>
+					<div>
+						<button class="btn btn-sm btn-outline-secondary me-2 edit-note-btn" data-note-id="{{ note.id }}"><i class="fa-solid fa-pencil"></i></button>
+						<button class="btn btn-sm btn-outline-danger delete-note-btn" data-note-id="{{ note.id }}"><i class="fa-solid fa-trash-can"></i></button>
+					</div>
+				</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="createNoteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="createNoteForm" action="{{ url_for('main.create_note') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add new note</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="createNoteTitle" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="createNoteTitle" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="createNoteContent" class="form-label">Content</label>
+                        <textarea class="form-control" id="createNoteContent" name="content" rows="10"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="createNoteColumn" class="form-label">Choose column</label>
+                            <select name="column_id" id="createNoteColumn" class="form-select">
+                                {% for column in all_columns %}
+                                    <option value="{{ column.id }}">{{ column.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create-note-attachments" class="form-label">Attached file</label>
+                            <input class="form-control" type="file" name="attachments[]" id="create-note-attachments" multiple>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Note save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editNoteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="editNoteForm" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Note edit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editNoteId" name="note_id">
+                    <div class="mb-3">
+                        <label for="editNoteTitle" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="editNoteTitle" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editNoteContent" class="form-label">Content</label>
+                        <textarea class="form-control" id="editNoteContent" name="content" rows="10"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="editNoteColumn" class="form-label">Choose column</label>
+                            <select name="column_id" id="editNoteColumn" class="form-select">
+                                {% for column in all_columns %}
+                                    <option value="{{ column.id }}">{{ column.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                             <label for="edit-note-attachments" class="form-label">Attach new file</label>
+                            <input class="form-control" type="file" name="attachments[]" id="edit-note-attachments" multiple>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">Attached file:</label>
+                        <div id="edit-note-attachment-list">
+                            </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Change save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="createColumnModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="createColumnForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add new column</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="createColumnName" class="form-label">Column name</label>
+                        <input type="text" class="form-control" id="createColumnName" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Create column</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='vendor/sortablejs/Sortable.min.js') }}"></script>
+    <script>
+        const UPLOAD_IMAGE_URL = "{{ url_for('main.upload_image') }}";
+        const CREATE_NOTE_URL = "{{ url_for('main.create_note') }}";
+        const GET_NOTE_URL = "{{ url_for('main.get_note', note_id=0) }}";
+        const UPDATE_NOTE_URL = "{{ url_for('main.update_note', note_id=0) }}";
+        const DELETE_NOTE_URL = "{{ url_for('main.delete_note', note_id=0) }}";
+        const CREATE_COLUMN_URL = "{{ url_for('main.create_column') }}";
+        const DELETE_COLUMN_URL = "{{ url_for('main.delete_column', column_id=0) }}";
+		const RENAME_COLUMN_URL = "{{ url_for('main.rename_column', column_id=0) }}";
+        const UPDATE_COLUMN_ORDER_URL = "{{ url_for('main.update_column_order') }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/notes.js') }}"></script>
+{% endblock %}

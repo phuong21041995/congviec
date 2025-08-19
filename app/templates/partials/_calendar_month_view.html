@@ -1,0 +1,121 @@
+<div class="table-responsive bg-white rounded shadow-sm">
+    <table class="table table-bordered month-view">
+        <thead class="text-center">
+            <tr>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+                <th>Sun</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(6) %}
+            <tr>
+                {% for j in range(7) %}
+                    {% set day = calendar_dates[i*7 + j] %}
+                    {% set day_str = day.strftime('%Y-%m-%d') %}
+                    {% set tasks_for_day = tasks_by_date.get(day_str, []) %}
+                    <td class="{% if day.month != current_month %}other-month{% endif %} {% if day_str == today_date_str %}table-primary{% endif %}" 
+                        ondblclick="window.location.href='{{ url_for('main.index', view_mode='day', date_str=day_str) }}'" 
+                        title="Double click to check detail">
+                        <div class="day-number">{{ day.day }}</div>
+						{% for task in tasks_for_day[:10] %}
+                            <div class="task-item-sm status-{{ task['status'] | lower | replace(' ', '-') }}" 
+                                 title="{{ task['what'] }}"
+                                 data-task-id="{{ task['id'] }}"
+                                 data-task-json='{{ task | tojson | safe }}'
+                            </div>
+                                <i class="fa-solid fa-circle fa-xs"></i>
+                                <span>{{ task['what'] }}</span>
+                            </div>
+                        {% endfor %}
+                        {% if tasks_for_day|length > 10 %}
+                            <div class="more-tasks-link">
+                                +{{ tasks_for_day|length - 10 }} more
+                            </div>
+                        {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>							
+
+<style>
+    .month-view td { 
+        height: 10px; 
+        overflow: hidden;
+        vertical-align: top; 
+        padding: 0.2rem; 
+        cursor: pointer;
+		color: black;
+        transition: background-color 0.2s ease-in-out;
+    }
+    
+    .month-view td:hover {
+        background-color: #e9ecef;
+    }
+
+    .month-view .day-number { 
+        font-size: 0.9rem; 
+        font-weight: bold; 
+        margin-bottom: 0px;
+    }
+    .month-view .other-month { 
+        background-color: #f8f9fa; 
+    }
+    .month-view .other-month .day-number { 
+        color: #adb5bd; 
+    }
+
+    /* ================================================= */
+    /* == STYLE MỚI CHO SỰ KIỆN - ĐỒNG BỘ VỚI VIEW TUẦN == */
+    /* ================================================= */
+
+    .month-view .task-item-sm { 
+        font-size: 0.75rem; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        border-radius: 9px; 
+        padding: 0.25px 0.25px; 
+        margin-bottom: 3px; 
+        background-color: #f8f9fa; /* Màu nền nhẹ nhàng */
+        border: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        color: #212529; /* Chữ màu đen */
+    }
+
+    .month-view .task-item-sm .fa-circle {
+        margin-right: 5px; /* Khoảng cách giữa chấm và chữ */
+    }
+
+    /* TÔ MÀU CHO CHẤM TRÒN DỰA TRÊN TRẠNG THÁI */
+    .task-item-sm.status-pending .fa-circle { color: #6c757d; }
+    .task-item-sm.status-in-progress .fa-circle { color: #0d6efd; }
+    .task-item-sm.status-review .fa-circle { color: #6f42c1; }
+    .task-item-sm.status-done .fa-circle { color: #198754; }
+    .task-item-sm.status-drop .fa-circle { color: #dc3545; }
+
+    /* GẠCH NGANG NHỮNG VIỆC ĐÃ "DONE" */
+    .task-item-sm.status-done {
+        text-decoration: line-through;
+        color: #6c757d; /* Chữ mờ đi */
+        background-color: #f1f3f5;
+    }
+    .task-item-sm.status-drop {
+        opacity: 0.7;
+    }
+    
+    .more-tasks-link {
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #0d6efd;
+        margin-top: 4px;
+    }
+</style>

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Result search for '{{ query }}'{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="m-0">
+        <i class="fa-solid fa-search me-2"></i>
+        Result search for: <span class="text-primary">"{{ query }}"</span>
+    </h2>
+</header>
+
+{% if not tasks and not objectives and not key_results and not actions %}
+    <div class="alert alert-warning text-center">
+        <h4>Nothing to show</h4>
+        <p class="mb-0">Try to use other key.</p>
+    </div>
+{% else %}
+    {% if tasks %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="m-0">Event ({{ tasks|length }})</h5>
+        </div>
+        <ul class="list-group list-group-flush">
+            {% for task in tasks %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.index', view_mode='day', date_str=task.task_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+                    <strong>{{ task.what | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+                <small class="text-muted d-block">
+                    At {{ task.hour or 'all day' }}h, day {{ task.task_date.strftime('%d/%m/%Y') }}
+                </small>
+                {# Hiển thị context từ ghi chú nếu tìm thấy #}
+                {% if query.lower() in (task.note or '').lower() %}
+                <p class="mt-2 mb-0 p-2 bg-light border rounded small text-muted">
+                    <i class="fa-solid fa-quote-left fa-xs me-1"></i>
+                    ...{{ task.note | truncate(150) | replace(query, '<mark>' + query + '</mark>') | safe }}...
+                </p>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if objectives %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">OKR ({{ objectives|length }})</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for obj in objectives %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.okr_page', date_str=obj.start_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+                    <strong>{{ obj.content | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+                <small class="text-muted d-block">From {{ obj.start_date.strftime('%d/%m/%Y') }}</small>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if key_results or actions %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">OKR</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for kr in key_results %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.okr_page', date_str=kr.objective.start_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+                    <strong>{{ kr.content | replace(query, '<mark>' + query + '</mark>') | safe }} (KR)</strong>
+                </a>
+                <small class="text-muted d-block">Belong OKR: {{ kr.objective.content }}</small>
+            </li>
+            {% endfor %}
+            {% for action in actions %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.action_detail', action_id=action.id) }}" class="text-decoration-none">
+                    <strong>{{ action.content | striptags | replace(query, '<mark>' + query + '</mark>') | safe }} (Action)</strong>
+                </a>
+                <small class="text-muted d-block">Belong KR: {{ action.key_result.content }}</small>
+                {# Hiển thị context từ báo cáo nếu tìm thấy #}
+                {% if query.lower() in (action.report or '').lower() %}
+                <p class="mt-2 mb-0 p-2 bg-light border rounded small text-muted">
+                    <i class="fa-solid fa-quote-left fa-xs me-1"></i>
+                    ...{{ action.report | truncate(150) | replace(query, '<mark>' + query + '</mark>') | safe }}...
+                </p>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% endblock %}
