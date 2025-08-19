@@ -1330,53 +1330,68 @@ def upload_image():
 # ==============================================================================
 # HÀM TRỢ GIÚP LẤY GIỜ VIỆT NAM
 # ==============================================================================
-def get_vn_now():
-    """Lấy thời gian hiện tại theo múi giờ Việt Nam (UTC+7)."""
-    return datetime.now(timezone(timedelta(hours=7)))
-
-def get_vn_today():
-    """Lấy ngày hiện tại theo múi giờ Việt Nam."""
-    return get_vn_now().date()
+VN_TZ = timezone(timedelta(hours=7))
 
 def to_vn_time(dt):
+    """Đổi timestamp trong DB (UTC/naive) sang giờ VN (aware)."""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone(timedelta(hours=7)))
+    return dt.astimezone(VN_TZ)
+
+def get_vn_now():
+    return datetime.now(VN_TZ)
+
+def get_vn_today():
+    return get_vn_now().date()
+
+def _vn_day_bounds_to_utc(target_date: date):
+    """Trả về [start_utc, end_utc) bao trùm 1 ngày theo giờ VN, đưa về UTC-naive để so sánh trong DB."""
+    start_vn = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=VN_TZ)
+    end_vn   = start_vn + timedelta(days=1)
+    # DB của bạn là "timestamp without time zone" => so sánh naive UTC
+    start_utc = start_vn.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc   = end_vn.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+def _vn_range_to_utc(start_date: date, end_date_inclusive: date):
+    start_utc, _ = _vn_day_bounds_to_utc(start_date)
+    _, end_utc   = _vn_day_bounds_to_utc(end_date_inclusive)
+    return start_utc, end_utc
 # ==============================================================================
 
 # QUÁN TÂM (NHẬT KÝ TU TẬP)
 # ==============================================================================
 
 def calculate_streak(user_id):
-    """Tính chuỗi ngày thực hành liên tục."""
-    log_dates_query = db.session.query(
-        func.distinct(func.date(PracticeLog.log_ts, '+7 hours'))
-    ).filter_by(user_id=user_id).order_by(func.date(PracticeLog.log_ts, '+7 hours').desc()).all()
-
-    if not log_dates_query:
+    """Tính chuỗi ngày thực hành liên tục theo giờ VN."""
+    rows = db.session.query(PracticeLog.log_ts).filter(PracticeLog.user_id == user_id).all()
+    if not rows:
         return 0
 
-    log_dates = {datetime.strptime(d[0], '%Y-%m-%d').date() for d in log_dates_query}
+    # Lấy tất cả ngày (giờ VN) đã có log
+    logged_dates = {to_vn_time(ts).date() for (ts,) in rows}
     streak = 0
-    today = get_vn_today()
-
-    current_day = today
-    while current_day in log_dates:
+    cursor = get_vn_today()
+    while cursor in logged_dates:
         streak += 1
-        current_day -= timedelta(days=1)
+        cursor -= timedelta(days=1)
     return streak
 
+# -------------------------------
+# DASHBOARD
+# -------------------------------
 @bp.route('/practice-log')
 @login_required
 def practice_log_dashboard():
-    """Render trang chính của Nhật ký Tu tập."""
     streak = calculate_streak(current_user.id)
-    recent_logs = PracticeLog.query.filter_by(user_id=current_user.id).order_by(PracticeLog.log_ts.desc()).limit(15).all()
+    recent_logs = (PracticeLog.query
+                   .filter_by(user_id=current_user.id)
+                   .order_by(PracticeLog.log_ts.desc())
+                   .limit(15).all())
 
-    # (Server-side render) chuyển đổi giờ cho recent_logs sang múi giờ VN
+    # render dùng giờ VN
     for log in recent_logs:
-        vn_time = to_vn_time(log.log_ts)
-        log.log_ts = vn_time  # chỉ dùng cho template
+        log.log_ts = to_vn_time(log.log_ts)
 
     return render_template(
         'practice_log.html',
@@ -1385,7 +1400,6 @@ def practice_log_dashboard():
         recent_logs=recent_logs,
         timedelta=timedelta
     )
-
 @bp.route('/api/practice-log/<int:log_id>', methods=['GET'])
 @login_required
 def get_deep_log(log_id):
@@ -1402,40 +1416,36 @@ def get_deep_log(log_id):
 @bp.route('/api/practice-log/by-date')
 @login_required
 def get_logs_by_date():
-    """API để lấy tất cả log trong một ngày."""
     date_str = request.args.get('date')
     if not date_str:
         return jsonify({'success': False, 'message': 'Thiếu ngày.'}), 400
+
     try:
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        vn_date_col = func.date(PracticeLog.log_ts, '+7 hours')
-        logs = PracticeLog.query.filter(
-            PracticeLog.user_id == current_user.id,
-            vn_date_col == target_date.strftime('%Y-%m-%d')
-        ).order_by(PracticeLog.log_ts.asc()).all()
-
-        logs_list = []
-        for log in logs:
-            log_dict = log.to_dict()
-            if 'tag' in log_dict and log_dict['tag']:
-                log_dict['tag'] = log_dict['tag'].strip()
-            vn_time = to_vn_time(log.log_ts)
-            log_dict['log_ts_vn'] = vn_time.isoformat()
-            log_dict['log_time_vn'] = vn_time.strftime('%H:%M')
-            logs_list.append(log_dict)
-        return jsonify({'success': True, 'logs': logs_list})
     except ValueError:
         return jsonify({'success': False, 'message': 'Định dạng ngày không hợp lệ.'}), 400
 
-# ======= Helpers đặt ở gần đầu file routes.py (trước save_practice_log) =======
-def _extract_field(data, base_name, active_tab_id=None):
-    """Ưu tiên field thống nhất; nếu trống thì lấy field theo tab."""
-    val_unified = (data.get(base_name) or "").strip()
-    if val_unified:
-        return val_unified
-    if active_tab_id:
-        return (data.get(f"{base_name}_{active_tab_id}") or "").strip()
-    return ""
+    start_utc, end_utc = _vn_day_bounds_to_utc(target_date)
+
+    logs = (PracticeLog.query
+            .filter(PracticeLog.user_id == current_user.id,
+                    PracticeLog.log_ts >= start_utc,
+                    PracticeLog.log_ts <  end_utc)
+            .order_by(PracticeLog.log_ts.asc())
+            .all())
+
+    logs_list = []
+    for log in logs:
+        d = log.to_dict()
+        vn_time = to_vn_time(log.log_ts)
+        d['log_ts_vn']  = vn_time.isoformat()
+        d['log_date']   = vn_time.strftime('%Y-%m-%d')
+        d['log_time_vn']= vn_time.strftime('%H:%M')
+        if d.get('tag'):
+            d['tag'] = d['tag'].strip()
+        logs_list.append(d)
+
+    return jsonify({'success': True, 'logs': logs_list})
 
 def _infer_tag_from_craving(craving_val: str) -> str:
     c = (craving_val or "").strip()
@@ -1460,32 +1470,22 @@ def save_practice_log():
         log_date_str = data.get('log_date')
         log_time_str = data.get('log_time', '00:00')
         if log_date_str:
-            log_datetime_vn = datetime.strptime(f"{log_date_str} {log_time_str}", '%Y-%m-%d %H:%M')
-            log.log_ts = log_datetime_vn.replace(tzinfo=timezone(timedelta(hours=7))).astimezone(timezone.utc)
+            log_datetime_vn = datetime.strptime(f"{log_date_str} {log_time_str}", '%Y-%m-%d %H:%M').replace(tzinfo=VN_TZ)
+            log.log_ts = log_datetime_vn.astimezone(timezone.utc).replace(tzinfo=None)  # lưu UTC-naive
         else:
-            log.log_ts = get_vn_now().astimezone(timezone.utc)
+            log.log_ts = get_vn_now().astimezone(timezone.utc).replace(tzinfo=None)
 
-    # Map chung
     log.situation     = (data.get('situation') or "").strip()
     log.sense_door    = (data.get('sense_door') or "").strip()
     log.contemplation = (data.get('contemplation') or "").strip()
     log.outcome       = (data.get('outcome') or "").strip()
     log.note          = (data.get('note') or "Quán chiếu sâu...").strip()
 
-    # Optional (nếu đã có cột)
-    if 'intensity' in data and (data.get('intensity') or '').isdigit():
-        try: log.intensity = int(data.get('intensity')); 
-        except: pass
-    if 'duration_min' in data and (data.get('duration_min') or '').isdigit():
-        try: log.duration_min = int(data.get('duration_min'));
-        except: pass
-
-    # Lấy 3 field thống nhất + dự phòng theo tab (nếu bạn vẫn còn input theo tab)
     active_tab_id = data.get('active_tab_id')
     def _extract(base):
         v = (data.get(base) or "").strip()
         if v: return v
-        if active_tab_id: 
+        if active_tab_id:
             return (data.get(f"{base}_{active_tab_id}") or "").strip()
         return ""
     sense_object = _extract('sense_object')
@@ -1496,30 +1496,29 @@ def save_practice_log():
     if feeling or not log_id:      log.feeling      = feeling
     if craving or not log_id:      log.craving      = craving
 
-    # >>>>>>> QUY TẮC TAG (ƯU TIÊN 100% ÁI) <<<<<<<
-    incoming_tag = (data.get('tag') or "").strip()
+    # Ưu tiên suy ra tag từ Ái
     def _infer_tag_from_craving(c: str) -> str:
         c = (c or "").strip()
         if "Tham" in c: return "Tham"
         if "Sân"  in c: return "Sân"
         if "Si"   in c: return "Si"
         return ""
+
+    incoming_tag = (data.get('tag') or "").strip()
     inferred = _infer_tag_from_craving(craving)
-
     if inferred:
-        log.tag = inferred                     # có Ái -> luôn theo Ái
+        log.tag = inferred
     elif incoming_tag:
-        log.tag = incoming_tag                 # không có Ái -> dùng tag client
+        log.tag = incoming_tag
     else:
-        if not log_id: log.tag = "Chánh niệm"  # tạo mới -> default
-        # cập nhật -> giữ nguyên tag cũ
+        if not log_id:
+            log.tag = "Chánh niệm"
 
-    if not log_id: db.session.add(log)
+    if not log_id:
+        db.session.add(log)
     db.session.commit()
 
-    # >>> DEBUG: trả thêm final_tag để bạn nhìn ngay trên Network tab
-    return jsonify({'success': True, 'message': 'Đã lưu lại quán chiếu.', 
-                    'final_tag': log.tag, 'received_craving': craving})
+    return jsonify({'success': True, 'message': 'Đã lưu lại quán chiếu.', 'final_tag': log.tag})
 
 
 @bp.route('/api/practice-log/<int:log_id>', methods=['DELETE'])
@@ -1534,67 +1533,78 @@ def delete_practice_log(log_id):
 @bp.route('/api/practice-log/chart-data')
 @login_required
 def get_chart_data():
-    """API cung cấp dữ liệu cho các biểu đồ."""
     days = request.args.get('days', 30, type=int)
     end_date = get_vn_today()
     start_date = end_date - timedelta(days=days - 1)
-    core_tags = ['Tham', 'Sân', 'Si', 'Chánh niệm']
+    start_utc, end_utc = _vn_range_to_utc(start_date, end_date)
 
+    rows = (PracticeLog.query
+            .filter(PracticeLog.user_id == current_user.id,
+                    PracticeLog.log_ts >= start_utc,
+                    PracticeLog.log_ts <  end_utc)
+            .with_entities(PracticeLog.log_ts, PracticeLog.tag)
+            .all())
 
-    vn_date_col = func.date(PracticeLog.log_ts, '+7 hours')
+    core_tags = {'Tham', 'Sân', 'Si', 'Chánh niệm'}
+    # trend_counts[date_str][tag] = count
+    trend_counts = {}
+    today_counts = {}
 
-    trend_data_query = db.session.query(
-        vn_date_col.label('log_date'),
-        func.trim(PracticeLog.tag).label('tag'),
-        func.count(PracticeLog.id)
-    ).filter(
-        PracticeLog.user_id == current_user.id,
-        vn_date_col >= start_date.strftime('%Y-%m-%d'),
-        func.trim(PracticeLog.tag).in_(core_tags)
-    ).group_by('log_date', 'tag').all()
+    for ts, tag in rows:
+        tag = (tag or '').strip()
+        d_vn = to_vn_time(ts).date()
+        d_key = d_vn.strftime('%Y-%m-%d')
 
-    today_tags_query = db.session.query(
-        func.trim(PracticeLog.tag), func.count(PracticeLog.id)
-    ).filter(
-        PracticeLog.user_id == current_user.id,
-        vn_date_col == end_date.strftime('%Y-%m-%d'),
-    ).group_by(func.trim(PracticeLog.tag)).all()
+        trend_counts.setdefault(d_key, {})
+        trend_counts[d_key][tag] = trend_counts[d_key].get(tag, 0) + 1
 
-    return jsonify({
-        'trend_data': [{'date': r.log_date, 'tag': r.tag, 'count': r[2]} for r in trend_data_query],
-        'today_pie_data': {r[0]: r[1] for r in today_tags_query}
-    })
+        if d_vn == end_date:
+            today_counts[tag] = today_counts.get(tag, 0) + 1
 
+    # build trend_data: chỉ xuất các core tag
+    trend_data = []
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        d_key = d.strftime('%Y-%m-%d')
+        counts = trend_counts.get(d_key, {})
+        for t in core_tags:
+            c = counts.get(t, 0)
+            if c:
+                trend_data.append({'date': d_key, 'tag': t, 'count': c})
+
+    return jsonify({'trend_data': trend_data, 'today_pie_data': today_counts})
 @bp.route('/api/practice-log/calendar-view')
 @login_required
 def get_practice_calendar_data():
-    """API cung cấp dữ liệu cho Lịch Quán Chiếu kèm số log theo ngày."""
     try:
         vn_now = get_vn_now()
-        year = request.args.get('year', vn_now.year, type=int)
+        year  = request.args.get('year', vn_now.year, type=int)
         month = request.args.get('month', vn_now.month, type=int)
 
-        vn_date_col = func.date(PracticeLog.log_ts, '+7 hours')
-        month_str = f'{year:04d}-{month:02d}'
+        month_start = date(year, month, 1)
+        # ngày cuối tháng
+        if month == 12:
+            next_month_start = date(year + 1, 1, 1)
+        else:
+            next_month_start = date(year, month + 1, 1)
+        month_end = next_month_start - timedelta(days=1)
 
-        logged_dates_query = db.session.query(
-            func.distinct(vn_date_col)
-        ).filter(
-            PracticeLog.user_id == current_user.id,
-            func.strftime('%Y-%m', PracticeLog.log_ts, '+7 hours') == month_str
-        ).all()
-        logged_dates = [d[0] for d in logged_dates_query]
+        start_utc, end_utc = _vn_range_to_utc(month_start, month_end)
 
-        counts_rows = db.session.query(
-            vn_date_col.label('d'),
-            func.count(PracticeLog.id)
-        ).filter(
-            PracticeLog.user_id == current_user.id,
-            func.strftime('%Y-%m', PracticeLog.log_ts, '+7 hours') == month_str
-        ).group_by('d').all()
-        counts_by_date = {d: c for d, c in counts_rows}
+        rows = (PracticeLog.query
+                .filter(PracticeLog.user_id == current_user.id,
+                        PracticeLog.log_ts >= start_utc,
+                        PracticeLog.log_ts <  end_utc)
+                .with_entities(PracticeLog.log_ts)
+                .all())
 
-        return jsonify({'success': True, 'logged_dates': logged_dates, 'counts_by_date': counts_by_date})
+        counts = {}
+        for (ts,) in rows:
+            d_key = to_vn_time(ts).date().strftime('%Y-%m-%d')
+            counts[d_key] = counts.get(d_key, 0) + 1
+
+        logged_dates = sorted(counts.keys())
+        return jsonify({'success': True, 'logged_dates': logged_dates, 'counts_by_date': counts})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
