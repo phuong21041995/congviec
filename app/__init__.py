@@ -1,9 +1,7 @@
 import os
 import sys
 from flask import Flask, jsonify
-from flask_migrate import Migrate  # thêm vào đầu file
-migrate = Migrate()  # thêm dòng này
-
+from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
@@ -12,12 +10,20 @@ from config import Config
 from zoneinfo import ZoneInfo
 from datetime import datetime
 
+# Fallback hashing ngắn nếu cần (tránh crash khi password_hash còn 128)
+from werkzeug.security import generate_password_hash
+
+from sqlalchemy import select
+from sqlalchemy.exc import DataError, StatementError
+
+migrate = Migrate()
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Vui lòng đăng nhập để tiếp tục.'
 login_manager.login_message_category = 'warning'
+
 
 # --- Jinja2 filter: UTC -> giờ VN (hoặc tz tuỳ chọn) ---
 def to_local_time(value, tz_name='Asia/Ho_Chi_Minh', fmt='%Y-%m-%d %H:%M'):
@@ -30,8 +36,10 @@ def to_local_time(value, tz_name='Asia/Ho_Chi_Minh', fmt='%Y-%m-%d %H:%M'):
     except Exception:
         return str(value)
 
+
 def exe_dir():
     return os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 
 def candidate_dirs(name):
     root = exe_dir()
@@ -45,11 +53,13 @@ def candidate_dirs(name):
     cands.append(os.path.join(root, name))
     return cands
 
+
 def pick_first_existing(paths):
     for p in paths:
         if os.path.isdir(p):
             return p
     return paths[0]
+
 
 def create_app(config_class=Config):
     cand_templates = candidate_dirs('templates')
@@ -60,6 +70,7 @@ def create_app(config_class=Config):
     app = Flask(__name__, template_folder=templates_dir, static_folder=static_dir)
     app.config.from_object(config_class)
 
+    # Prepare uploads folder
     try:
         upload_folder = app.config['UPLOAD_FOLDER']
         if not os.path.exists(upload_folder):
@@ -71,6 +82,7 @@ def create_app(config_class=Config):
     if not app.config.get('SECRET_KEY'):
         app.config['SECRET_KEY'] = 'change-me-please'
 
+    # Normalize sqlite path to absolute (portable build)
     uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
     if uri.startswith('sqlite:///'):
         rel = uri.replace('sqlite:///', '')
@@ -80,16 +92,21 @@ def create_app(config_class=Config):
             app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{abs_db}'
 
     db.init_app(app)
-    migrate.init_app(app, db) 
+    migrate.init_app(app, db)
     bcrypt.init_app(app)
     login_manager.init_app(app)
 
     app.jinja_env.filters['to_local_time'] = to_local_time
     app.jinja_loader = ChoiceLoader([FileSystemLoader(p) for p in cand_templates])
 
+    # Import models so Alembic thấy metadata
     from . import models  # noqa: F401
+
+    # Với SQLite (dev) có thể create_all để tiện; Postgres (prod) nên rely on migrations
     with app.app_context():
-        db.create_all()
+        uri_now = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if uri_now.startswith('sqlite:///'):
+            db.create_all()
 
     # --- ĐĂNG KÝ CÁC BLUEPRINT ---
     from .auth import bp as auth_bp
@@ -98,11 +115,11 @@ def create_app(config_class=Config):
     from .routes import bp as main_bp
     app.register_blueprint(main_bp)
 
-    # === DÒNG CODE SỬA LỖI ĐƯỢC THÊM VÀO ĐÂY ===
+    # API uploads
     from .uploads_api import bp as uploads_api_bp
     app.register_blueprint(uploads_api_bp)
-    # ============================================
 
+    # --- Route chẩn đoán template ---
     @app.route('/__diag__/templates')
     def _diag_templates():
         targets = ['auth/login.html', 'login.html', 'index.html', 'base.html']
@@ -121,6 +138,7 @@ def create_app(config_class=Config):
     app.logger.info('SEARCH PATHS   : %s', cand_templates)
 
     from .models import User
+
     @login_manager.user_loader
     def load_user(user_id):
         try:
@@ -128,33 +146,45 @@ def create_app(config_class=Config):
         except Exception:
             return None
 
-    # ✅ Tạo user mặc định nếu chưa có
-    from sqlalchemy import select
-    with app.app_context():
-        has_user = db.session.execute(select(User.id)).first()
-        if not has_user:
-            app.logger.info("Không có user nào. Đang tạo user mặc định...")
-            user = User(username="admin", email="admin@example.com")
-            user.set_password("adidaphat")
-            db.session.add(user)
-            db.session.commit()
-            app.logger.info("✅ Đã tạo user mặc định: admin / adidaphat")
-        else:
-            app.logger.info("✅ Đã có user trong database. Bỏ qua tạo mặc định.")
-            
+    # === NGĂN SEED khi đang chạy `flask db ...` hoặc khi set env SKIP_SEED=1 ===
+    is_flask_db_cmd = len(sys.argv) > 1 and sys.argv[1] == "db"
+    skip_seed_env   = os.environ.get("SKIP_SEED") == "1"
+
+    if not is_flask_db_cmd and not skip_seed_env:
+        with app.app_context():
+            has_user = db.session.execute(select(User.id)).first()
+            if not has_user:
+                app.logger.info("Không có user nào. Đang tạo user mặc định...")
+                user = User(username="admin", email="admin@example.com")
+                try:
+                    # Cố gắng dùng scrypt (werkzeug default)
+                    user.set_password("adidaphat")
+                    db.session.add(user)
+                    db.session.commit()
+                except (DataError, StatementError):
+                    # Nếu crash do password_hash còn 128 → rollback & fallback pbkdf2
+                    db.session.rollback()
+                    # fallback trực tiếp, KHÔNG phụ thuộc method trong model
+                    user.password_hash = generate_password_hash("adidaphat", method="pbkdf2:sha256")
+                    db.session.add(user)
+                    db.session.commit()
+                app.logger.info("✅ Đã tạo user mặc định: admin / adidaphat")
+            else:
+                app.logger.info("✅ Đã có user trong database. Bỏ qua tạo mặc định.")
+
+    # --- Jinja filters tiện ích ---
     def format_date_short(date_string):
-        """Format a date string 'YYYY-MM-DD' to 'DD/MM'."""
+        """Format 'YYYY-MM-DD' -> 'DD/MM'."""
         if isinstance(date_string, str):
             try:
-                # Chuyển đổi chuỗi thành đối tượng datetime trước khi format
                 dt_obj = datetime.strptime(date_string, '%Y-%m-%d')
                 return dt_obj.strftime('%d/%m')
             except ValueError:
-                return date_string # Trả về nguyên bản nếu format sai
+                return date_string
         return date_string
-        
+
     def to_date_obj(date_string):
-        """Convert a 'YYYY-MM-DD' string to a date object."""
+        """Convert 'YYYY-MM-DD' string to a date object."""
         if isinstance(date_string, str):
             try:
                 return datetime.strptime(date_string, '%Y-%m-%d').date()
@@ -163,7 +193,6 @@ def create_app(config_class=Config):
         return None
 
     app.jinja_env.filters['format_date_short'] = format_date_short
-    app.jinja_env.filters['to_date'] = to_date_obj # ĐĂNG KÝ FILTER MỚI
-    # Trong hàm create_app, trước dòng 'return app'
+    app.jinja_env.filters['to_date'] = to_date_obj
 
     return app
