@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Project Timeline{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css">
+<style>
+  .gantt_container{border-radius:.5rem;border:1px solid #dee2e6}
+  .gantt_grid_scale .gantt_grid_head_cell,.gantt_task_scale .gantt_scale_cell{background:#f8f9fa;font-weight:700}
+  .gantt_task_row,.gantt_grid_data .gantt_row{border-bottom:1px solid #e9ecef}
+  .gantt_grid_data .gantt_cell, .gantt_grid_scale .gantt_grid_head_cell{white-space:nowrap; text-overflow:clip; overflow:visible}
+  #gantt_here .weekend .gantt_task_cell,#gantt_here .weekend .gantt_scale_cell{background:#fafafa}
+  .gantt_marker.today .gantt_marker_content{background:#ff4757;color:#ff4757}
+  .gantt_task_line.type-project{background:#2563eb;border-color:#1d4ed8}
+  .gantt_task_line.type-build{background:#6b7280;border-color:#4b5563}
+  .gantt_task_line.type-objective{background:#06b6d4;border-color:#0891b2}
+  .gantt_task_line.type-key_result{background:#22c55e;border-color:#16a34a}
+  .gantt_task_line.type-task{background:#94a3b8;border-color:#64748b}
+  .gantt_task_line .gantt_task_progress{opacity:.25}
+  .gantt_task_line .gantt_task_content { color: white; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+  
+  /* CẬP NHẬT 1: Kiểu & MÀU chữ ở cột tiêu đề theo cấp độ */
+  .grid-link{text-decoration:none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;}
+  .lbl-project{font-weight:800;font-size:1.05rem;color:#2563eb}
+  .lbl-build{font-weight:700;font-size:.96rem;color:#374151}
+  .lbl-objective{font-weight:600;font-style:italic;font-size:.96rem;color:#0e7490}
+  .lbl-key_result{font-style:italic;font-size:.96rem;color:#15803d}
+  .lbl-task{font-size:.92rem;color:#334155}
+  .lbl-task:hover { text-decoration: underline; color: #0d6efd; }
+
+  .legend-badge{border-radius:.4rem;padding:.25rem .5rem;font-weight:600}
+  .gantt_task_line.status_done{ opacity:.45; }
+  .gantt_grid_data .gantt_row.status_done .grid-link{ text-decoration:line-through; opacity:.75; }
+  .gantt_task_row.gantt_row_odd, .gantt_grid_data .gantt_row.gantt_row_odd { background-color: #fdfdfd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="m-0"><i class="fa-solid fa-timeline me-2"></i>Project Timeline:
+    <span class="text-primary">{{ project_name }}</span>
+  </h2>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="btn-group" role="group">
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('year')">Year</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('month')">Month</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('week')">Week</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.zoomIn()">+</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.zoomOut()">-</button>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" id="btnToday">Today</button>
+    <button class="btn btn-outline-secondary btn-sm" id="btnFit">Fit</button>
+    <div class="input-group input-group-sm" style="width:240px;">
+      <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <input id="ganttSearch" class="form-control" placeholder="Search tasks...">
+    </div>
+    <div class="input-group input-group-sm" style="width:220px;">
+      <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+      <select id="ownerFilter" class="form-select"><option value="">All assignees</option></select>
+    </div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="toggleDone" checked>
+      <label class="form-check-label small" for="toggleDone">Show done</label>
+    </div>
+    <a href="{{ url_for('main.projects_list') }}" class="btn btn-success btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Back</a>
+  </div>
+</header>
+<div class="d-flex gap-2 align-items-center mb-2 small">
+  <span class="legend-badge" style="background:#2563eb;color:#fff">Model</span>
+  <span class="legend-badge" style="background:#6b7280;color:#fff">Build</span>
+  <span class="legend-badge" style="background:#06b6d4;color:#fff">Objective</span>
+  <span class="legend-badge" style="background:#22c55e;color:#fff">KR</span>
+  <span class="legend-badge" style="background:#94a3b8;color:#fff">Task</span>
+</div>
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div id="gantt_here" class="gantt_container" style="width:100%;height:620px;"></div>
+  </div>
+</div>
+{% include 'partials/_task_modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    if (gantt.plugins) {
+        gantt.plugins({ marker: true, tooltip: true });
+    }
+
+    /* ===== Cấu hình Layout & Cột ===== */
+    const gridWidth = () => Math.max(780, Math.floor(window.innerWidth * 0.60));
+    gantt.config.layout = {
+        css: "gantt_container",
+        rows: [{
+            cols: [
+                { view: "grid", scrollY: "scrollVer", width: gridWidth() },
+                { resizer: true, width: 4 },
+                { view: "timeline", scrollX: "scrollHor", scrollY: "scrollVer" },
+                { view: "scrollbar", id: "scrollVer" }
+            ]
+        }, { view: "scrollbar", id: "scrollHor", height: 20 }]
+    };
+    gantt.config.grid_resize = true;
+    gantt.config.autofit = true; // Bật autofit tổng thể
+    gantt.config.columns = [
+        { name: "text", label: "Build / Obj", tree: true, width: '*', resize: true, min_width: 250 },
+        { name: "start_date", label: "Start", align: "center", resize: true, autofit: true, min_width: 100 },
+        { name: "end_date", label: "End", align: "center", resize: true, autofit: true, min_width: 100, template: t => gantt.templates.date_grid ? gantt.templates.date_grid(t.end_date) : (t.end_date || "") },
+        { name: "owner", label: "Assignee", align: "center", resize: true, autofit: true, min_width: 120, template: t => t.owner || "" },
+        { name: "progress", label: "Prog.", align: "center", resize: true, autofit: true, min_width: 80, template: t => Math.round((t.progress || 0) * 100) + "%" }
+    ];
+    gantt.config.date_format = "%Y-%m-%d";
+    gantt.config.xml_date = "%Y-%m-%d";
+    gantt.config.fit_tasks = true;
+
+    /* ===== Cấu hình Zoom ===== */
+    gantt.ext.zoom.init({
+        levels: [
+            { name: "year", scale_height: 36, min_column_width: 50, scales: [{ unit: "year", step: 1, format: "%Y" }, { unit: "quarter", step: 1, format: d => "Q" + (Math.floor(d.getMonth() / 3) + 1) }] },
+            { name: "month", scale_height: 36, min_column_width: 90, scales: [{ unit: "month", step: 1, format: "%F, %Y" }, { unit: "week", step: 1, format: d => "W" + gantt.date.getWeek(d) }] },
+            { name: "week", scale_height: 36, min_column_width: 70, scales: [{ unit: "week", step: 1, format: "W%W" }, { unit: "day", step: 1, format: "%d(%D)" }] }
+        ]
+    });
+    gantt.ext.zoom.setLevel("week");
+
+    /* ===== Templates & Styling ===== */
+    const inferType = (t) => {
+        if (t.type) return t.type;
+        const id = String(t.id || "");
+        if (id.startsWith("proj-")) return "project";
+        if (id.startsWith("build-")) return "build";
+        if (id.startsWith("obj-")) return "objective";
+        if (id.startsWith("kr-")) return "key_result";
+        return "task";
+    };
+
+    gantt.templates.timeline_cell_class = (task, date) => [0, 6].includes(date.getDay()) ? "weekend" : "";
+    gantt.templates.task_class = (s, e, t) => { const tp = inferType(t); const cls = [`type-${tp}`]; if ((t.progress || 0) >= 1) cls.push("status_done"); return cls.join(" "); };
+    gantt.templates.task_row_class = (start, end, task) => (task.$index % 2 === 0) ? "gantt_row_odd" : "";
+    gantt.templates.task_text = (start, end, task) => task.text || "";
+    gantt.templates.tooltip_text = (s, e, t) => { const p = Math.round((t.progress || 0) * 100) + "%"; return `<b title="${t.text}">${t.text}</b><br/>Progress: ${p}`; };
+
+    gantt.templates.grid_text = function(start, end, task) {
+        const taskType = inferType(task);
+        const safeText = (task.text || "").replace(/"/g, "&quot;");
+        let priorityIcon = '';
+        if (task.priority === 'Urgent') {
+            priorityIcon = `<i class="fa-solid fa-flag text-danger" title="Urgent"></i>`;
+        } else if (task.priority === 'High') {
+            priorityIcon = `<i class="fa-solid fa-flag text-warning" title="High"></i>`;
+        }
+        return `<span class="grid-link lbl-${taskType}" title="${safeText}">${priorityIcon} ${task.text || ""}</span>`;
+    };
+
+    /* ===== Init & Marker ===== */
+    gantt.init("gantt_here");
+    gantt.addMarker({ start_date: new Date(), css: "today", text: "Today", title: "Today" });
+
+    /* ===== CẬP NHẬT 2: Logic mở Task Modal ===== */
+    const calendarScript = document.createElement('script');
+    calendarScript.src = "{{ url_for('static', filename='js/calendar.js') }}";
+    calendarScript.onload = function() {
+        window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
+        window.DELETE_TASK_URL_BASE = "{{ url_for('main.delete_task', task_id=0) }}".replace('/0', '/');
+        window.CURRENT_USER_ID = "{{ current_user.id }}";
+        
+        gantt.attachEvent("onTaskClick", function(id, e) {
+            if (e.target.closest(".gantt_tree_icon")) return true; // Cho phép mở/đóng folder
+            const task = gantt.getTask(id);
+            if (inferType(task) === 'task') {
+                e.preventDefault();
+                const realTaskId = String(task.id).replace('task-', '');
+                fetch(`/api/task/${realTaskId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && typeof window.openEditModal === 'function') {
+                            window.openEditModal(data.task);
+                        } else {
+                            console.error("Could not load task data or openEditModal is not defined.");
+                        }
+                    }).catch(err => console.error("Error fetching task:", err));
+                return false;
+            }
+            return true;
+        });
+    };
+    document.body.appendChild(calendarScript);
+
+    /* ===== Filter & Toolbar Logic ===== */
+    window.addEventListener('resize', () => { gantt.config.layout.rows[0].cols[0].width = gridWidth(); gantt.render(); });
+    let FILTER_OWNER = "", FILTER_SHOW_DONE = true, FILTER_QUERY = "";
+    gantt.attachEvent("onBeforeTaskDisplay", (id, t) => {
+        if (FILTER_OWNER && (t.owner || "") !== FILTER_OWNER) return false;
+        if (!FILTER_SHOW_DONE && (t.progress || 0) >= 1) return false;
+        if (FILTER_QUERY && !(t.text || "").toLowerCase().includes(FILTER_QUERY)) return false;
+        return true;
+    });
+    document.getElementById('btnToday').onclick = () => gantt.showDate(new Date());
+    document.getElementById('btnFit').onclick = () => { gantt.config.fit_tasks = true; gantt.render(); gantt.config.fit_tasks = false; };
+    document.getElementById('ownerFilter').addEventListener('change', e => { FILTER_OWNER = e.target.value || ""; gantt.refreshData(); });
+    document.getElementById('toggleDone').addEventListener('change', e => { FILTER_SHOW_DONE = e.target.checked; gantt.refreshData(); });
+    let si; document.getElementById('ganttSearch').addEventListener('input', e => { clearTimeout(si); si = setTimeout(() => { FILTER_QUERY = (e.target.value || '').toLowerCase().trim(); gantt.refreshData(); }, 150); });
+
+    /* ===== Data Loading ===== */
+    const dataUrl = "{{ url_for('main.api_dhtmlx_data') }}{% if project_id %}?project_id={{ project_id }}{% endif %}";
+    gantt.load(dataUrl, "json").then(function() {
+        const owners = new Set();
+        gantt.eachTask(t => { if (t.owner) owners.add(t.owner); });
+        const ownerSelect = document.getElementById('ownerFilter');
+        owners.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o;
+            opt.textContent = o;
+            ownerSelect.appendChild(opt);
+        });
+        gantt.render(); // Render lại sau khi có dữ liệu để autofit hoạt động
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Gantt Chart{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+<style>
+    .gantt .bar-wrapper.gantt-project .bar {
+        fill: #a3a3a3; /* Màu xám cho Project */
+    }
+    .gantt .bar-wrapper.gantt-build .bar {
+        fill: #5ab1d1; /* Màu xanh dương cho Build */
+    }
+    .gantt .bar-progress {
+        fill: #149645; /* Màu xanh lá cho tiến độ */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="m-0">
+        <i class="fa-solid fa-timeline me-2"></i>
+        Gantt Chart: 
+        {% if project_name %}
+            <span class="text-primary">{{ project_name }}</span>
+        {% else %}
+            <span>All Projects</span>
+        {% endif %}
+    </h2>
+    <div class="d-flex align-items-center gap-2">
+        <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="gantt-view" id="view-overview" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="view-overview">Builds Only</label>
+
+            <input type="radio" class="btn-check" name="gantt-view" id="view-detailed" autocomplete="off">
+            <label class="btn btn-outline-primary" for="view-detailed">Full Detail</label>
+        </div>
+        <a href="{{ url_for('main.projects_list') }}" class="btn btn-success">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Projects
+        </a>
+    </div>
+</header>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="gantt-container">
+            <svg id="gantt-chart"></svg>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const projectId = "{{ project_id or '' }}";
+        let gantt;
+
+        async function renderGantt(viewMode = 'overview') {
+            // Clear previous chart
+            const container = document.querySelector('.gantt-container');
+            container.innerHTML = '<svg id="gantt-chart"></svg>';
+
+            let apiUrl = "{{ url_for('main.gantt_data') }}";
+            const params = new URLSearchParams();
+            if (projectId) {
+                params.append('project_id', projectId);
+            }
+            params.append('view', viewMode);
+            apiUrl += `?${params.toString()}`;
+
+            try {
+                const res = await fetch(apiUrl);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                
+                const tasks = await res.json();
+
+                if (tasks && tasks.length > 0) {
+                    gantt = new Gantt("#gantt-chart", tasks, {
+                        header_height: 50,
+                        view_modes: ['Day', 'Week', 'Month'],
+                        bar_height: 20,
+                        bar_corner_radius: 3,
+                        padding: 18,
+                        view_mode: 'Week',
+                        on_click: (task) => console.log(task),
+                    });
+                } else {
+                    container.innerHTML = '<div class="alert alert-info">No items with dates found to display.</div>';
+                }
+            } catch (error) {
+                console.error("Failed to load Gantt data:", error);
+                container.innerHTML = '<div class="alert alert-danger">Could not load Gantt chart data.</div>';
+            }
+        }
+
+        // Initial render
+        renderGantt('overview');
+
+        // Event listeners for view switcher
+        document.getElementById('view-overview').addEventListener('change', () => renderGantt('overview'));
+        document.getElementById('view-detailed').addEventListener('change', () => renderGantt('detailed'));
+    });
+</script>
+{% endblock %}

@@ -1,101 +1,358 @@
-<div class="modal fade" id="taskModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
+<div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content shadow-lg rounded-4 border-0 animate-pop">
       <form id="taskForm" novalidate>
-        <div class="modal-header">
-          <h5 class="modal-title" id="taskModalLabel"></h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
+		<div class="modal-header bg-primary text-white rounded-top-4 drag-handle py-2 px-3">
+		  <h6 class="modal-title d-flex align-items-center gap-2 small mb-0" id="taskModalLabel">
+			<i class="fa-solid fa-pen-to-square"></i>
+			<span>Create / Edit Task</span>
+		  </h6>
+		  <div class="ms-auto d-flex align-items-center gap-1">
+			<button type="button" id="deleteTaskBtn" 
+					class="btn btn-sm btn-outline-light text-danger border-0" 
+					style="display:none;">
+			  <i class="fa-solid fa-trash-can"></i>
+			</button>
+			<button type="button" class="btn btn-sm btn-outline-light" data-bs-dismiss="modal" title="Close (Esc)">
+			  <i class="fa-solid fa-xmark"></i>
+			</button>
+			<button type="submit" class="btn btn-sm btn-dark" id="saveTaskBtn">
+			  <i class="fa-solid fa-save"></i>
+			</button>
+		  </div>
+		</div>
+
+
+        <div class="modal-body p-3">
           <input type="hidden" id="taskId" name="taskId">
-          
-          <div class="mb-3">
-            <label for="taskWhat" class="form-label">What</label>
-            <input type="text" class="form-control" id="taskWhat" name="taskWhat" required>
-          </div>
-          <div class="row">
-            <div class="col-md-3 mb-3">
-              <label for="taskDate" class="form-label">Date</label>
-              <input type="date" class="form-control" id="taskDate" name="taskDate" required>
+
+          <div class="row mb-2 align-items-center">
+            <div class="col-auto">
+              <label for="taskWhat" class="fw-semibold">
+                <i class="fa-solid fa-list-check me-1 text-primary"></i> What
+              </label>
             </div>
-            <div class="col-md-3 mb-3">
-              <label for="taskHour" class="form-label">Time</label>
-              <select class="form-select" id="taskHour" name="taskHour">
-                <option value="">all day</option>
-                {% for h in range(8, 20) %}
-                <option value="{{ h }}">{{ h }}:00</option>
-                {% endfor %}
-              </select>
+            <div class="col">
+               <input type="text" class="form-control form-control-elevated" id="taskWhat" name="taskWhat"
+                   placeholder="Enter task title…" minlength="3" maxlength="140" required>
             </div>
-            <div class="col-md-3 mb-3">
-              <label for="taskWho" class="form-label">PIC</label>
-              <select class="form-select" id="taskWho" name="taskWho">
-                <option value="">--- Select --</option>
-                {% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="col-md-3 mb-3">
-              <label for="taskStatus" class="form-label">Status</label>
-              <select class="form-select" id="taskStatus" name="taskStatus">
-                <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Review">Review</option>
-                <option value="Done">Done</option>
-                <option value="Drop">Drop</option>
-              </select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="taskRecurrence" class="form-label">Repeat</label>
-              <select class="form-select" id="taskRecurrence" name="taskRecurrence">
-                <option value="none">No repeat</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
-            <div class="col-md-6 mb-3" id="recurrence-end-date-wrapper" style="display: none;">
-              <label for="taskRecurrenceEndDate" class="form-label">End repeat day</label>
-              <input type="date" class="form-control" id="taskRecurrenceEndDate" name="taskRecurrenceEndDate">
-            </div>
-          </div>
-          <div class="mb-3">
-            <label for="taskNote" class="form-label">Note</label>
-            <textarea class="form-control" id="taskNote" name="taskNote" rows="3"></textarea>
           </div>
 
-          <div class="mb-3">
-              <label class="form-label">Current attached file:</label>
-              <div id="existing-attachments-list">
-                  </div>
-          </div>
-          <hr class="my-3">
-          <div class="mb-3">
-            <label class="form-label">Attached new file:</label>
-            <div class="file-drop-zone p-4 border rounded text-center bg-light"
-                 data-upload-url="{{ url_for('main.upload_attachment') }}"
-                 data-parent-id-field="taskId"
-                 data-parent-id-name="task_id">
-              <p class="m-0">Drag file or paste from clipboard</p>
+
+          <div class="okr-group bg-light-subtle border rounded p-3 mb-3">
+            <h6 class="fw-bold text-primary mb-3">
+              <i class="fa-solid fa-info-circle me-2"></i>Common info
+            </h6>
+            <div class="row g-3 mb-2">
+              <div class="col">
+                <label for="taskDate" class="form-label fw-semibold">
+                  <i class="fa-solid fa-calendar-day me-1 text-primary"></i> Date
+                </label>
+                <input type="date" class="form-control form-control-elevated" id="taskDate" name="taskDate" required>
+              </div>
+              <div class="col">
+                <label for="taskHour" class="form-label fw-semibold">
+                  <i class="fa-solid fa-clock me-1 text-primary"></i> Time
+                </label>
+                <select class="form-select form-control-elevated" id="taskHour" name="taskHour">
+                  <option value="">All day</option>
+                  {% for h in range(8, 20) %}<option value="{{ h }}">{{ h }}:00</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col">
+                <label for="taskWho" class="form-label fw-semibold">
+                  <i class="fa-solid fa-user-tie me-1 text-primary"></i> PIC
+                </label>
+                <select class="form-select form-control-elevated" id="taskWho" name="taskWho">
+                  <option value="">--- Select ---</option>
+                  {% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col">
+                <label for="taskStatus" class="form-label fw-semibold">
+                  <i class="fa-solid fa-signal me-1 text-primary"></i> Status
+                </label>
+                <select class="form-select form-control-elevated" id="taskStatus" name="taskStatus">
+                  <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Review">Review</option>
+                  <option value="Done">Done</option>
+                  <option value="Drop">Drop</option>
+                </select>
+              </div>
+              <div class="col">
+                <label for="taskPriority" class="form-label fw-semibold">
+                  <i class="fa-solid fa-flag me-1 text-primary"></i> Priority
+                </label>
+                <select class="form-select form-control-elevated" id="taskPriority" name="taskPriority">
+                  <option value="Low">Low</option>
+                  <option value="Medium" selected>Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
             </div>
-            <input type="file" class="file-input-trigger" multiple style="display: none;">
-            <button type="button" class="btn btn-outline-secondary btn-sm mt-2 file-select-button">
-              <i class="fa-solid fa-paperclip me-1"></i> Choose file from computer
-            </button>
-            <div class="attachment-list mt-2 border rounded p-2" style="max-height: 150px; overflow-y: auto; display: none;"></div>
+          </div>
+          
+			<div class="okr-group bg-light-subtle border rounded p-3 mb-3">
+			  <h6 class="fw-bold text-primary mb-3">
+				<i class="fa-solid fa-bullseye me-2"></i>OKR & Repeat Settings
+			  </h6>
+			  <div class="row g-3">
+				<div class="col-md">
+				  <label for="taskProject" class="form-label fw-semibold small">
+					<i class="fa-solid fa-diagram-project me-2 text-primary"></i>Project
+				  </label>
+				  <select class="form-select form-select-sm form-control-elevated" id="taskProject" name="taskProject">
+					<option value="">---</option>
+					{% for project in all_projects %}
+					<option value="{{ project.id }}">{{ project.name }}</option>
+					{% endfor %}
+				  </select>
+				</div>
+				<div class="col-md">
+				  <label for="taskBuild" class="form-label fw-semibold small">
+					<i class="fa-solid fa-box-archive me-2 text-primary"></i>Build
+				  </label>
+				  <select class="form-select form-select-sm form-control-elevated" id="taskBuild" name="taskBuild">
+					<option value="">---</option>
+				  </select>
+				</div>
+				<div class="col-md">
+				  <label for="taskObjective" class="form-label fw-semibold small">
+					<i class="fa-solid fa-crosshairs me-2 text-primary"></i>Objective
+				  </label>
+				  <select class="form-select form-select-sm form-control-elevated" id="taskObjective" name="taskObjective">
+					<option value="">---</option>
+				  </select>
+				</div>
+				<div class="col-md">
+				  <label for="taskKeyResult" class="form-label fw-semibold small">
+					<i class="fa-solid fa-key me-2 text-primary"></i>Key Result
+				  </label>
+				  <select class="form-select form-select-sm form-control-elevated" id="taskKeyResult" name="taskKeyResult">
+					<option value="">---</option>
+				  </select>
+				</div>
+				<div class="col-md">
+				  <label class="form-label fw-semibold small">
+					<i class="fa-solid fa-repeat me-2 text-primary"></i>Repeat
+				  </label>
+				  <div class="btn-group w-100">
+					<button type="button" class="btn btn-outline-primary dropdown-toggle w-100 form-control-elevated" data-bs-toggle="dropdown" aria-expanded="false" id="repeatDropdownBtn">
+					  <span id="repeatLabel">No repeat</span>
+					</button>
+					<ul class="dropdown-menu dropdown-menu-end" id="repeatMenu">
+					  <li><button class="dropdown-item" type="button" data-value="none">No repeat</button></li>
+					  <li><button class="dropdown-item" type="button" data-value="daily">Daily</button></li>
+					  <li><button class="dropdown-item" type="button" data-value="weekly">Weekly</button></li>
+					  <li><button class="dropdown-item" type="button" data-value="monthly">Monthly</button></li>
+					</ul>
+				  </div>
+				  <select class="form-select d-none" id="taskRecurrence" name="taskRecurrence">
+					<option value="none" selected>No repeat</option>
+					<option value="daily">Daily</option>
+					<option value="weekly">Weekly</option>
+					<option value="monthly">Monthly</option>
+				  </select>
+				</div>
+			  </div>
+
+			  <div class="row mt-3" id="recurrence-end-date-wrapper" style="display:none;">
+				<div class="col-md-4">
+				  <label for="taskRecurrenceEndDate" class="form-label fw-semibold">
+					<i class="fa-solid fa-calendar-check me-1 text-primary"></i> End repeat day
+				  </label>
+				  <input type="date" class="form-control form-control-elevated" id="taskRecurrenceEndDate" name="taskRecurrenceEndDate">
+				</div>
+			  </div>
+			</div>
+            
+          <div class="mb-3">
+            <label for="taskNote" class="form-label fw-semibold">
+              <i class="fa-solid fa-note-sticky me-1 text-primary"></i> Note
+            </label>
+            <textarea class="form-control form-control-elevated soft-resize" id="taskNote" name="taskNote" rows="3" maxlength="4000" placeholder="Add more context, checklists, links…"></textarea>
+          </div>
+
+          <div>
+            <label class="form-label fw-semibold">Attachments</label>
+            <div id="existing-attachments-list" class="mb-2"></div>
+            <div class="file-drop-zone p-2 border border-dashed rounded text-center bg-light hover-lift" id="attachmentDropzone">
+              <small class="text-muted"><i class="fa-solid fa-cloud-arrow-up me-2 text-primary"></i> Drag files, paste, or click to browse</small>
+            </div>
+            <input type="file" class="file-input-trigger" id="fileInputTrigger" multiple hidden>
+            <div class="attachment-list mt-2 border rounded p-2 bg-white fade-in" id="queuedFilesList" style="max-height: 160px; overflow-y: auto; display: none;"></div>
           </div>
         </div>
-        <div class="modal-footer d-flex justify-content-between">
-          <div>
-            <button type="button" id="deleteTaskBtn" class="btn btn-danger" style="display: none;">Delte</button>
-          </div>
-          <div>
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="submit" class="btn btn-primary">Save</button>
-          </div>
-        </div>
-      </form>
+
+        </form>
     </div>
   </div>
 </div>
+
+<style>
+.modal-header {
+  flex-shrink: 0;
+  padding: .35rem .75rem; /* header nhỏ gọn */
+}
+.modal-header h6 {
+  font-size: .9rem; /* chữ nhỏ hơn */
+}
+.modal-header .btn-sm {
+  padding: .15rem .4rem;
+}
+
+  .modal-lg { max-width: 820px; }
+
+  /* Cấu trúc lại layout bằng Flexbox để ghim footer */
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 4rem);
+  }
+  .modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+  .modal-header { /* CHANGE: Thêm flex-shrink để đảm bảo header không bị co lại */
+    flex-shrink: 0;
+  }
+  /* CHANGE: Xóa style cho footer */
+
+  .animate-pop { animation: popIn .18s ease-out; }
+  @keyframes popIn { from { transform: scale(.985); opacity:.0; } to { transform: scale(1); opacity:1; } }
+  
+  .form-control-elevated, .form-select.form-control-elevated { transition: box-shadow .2s ease, transform .05s ease; }
+  .form-control-elevated:focus, .form-select.form-control-elevated:focus {
+    box-shadow: 0 0 0 .2rem rgba(13,110,253,.2), 0 .4rem 1rem rgba(0,0,0,.06);
+    transform: translateY(-1px);
+  }
+  .border-dashed { border-style: dashed !important; }
+  .hover-lift { cursor: pointer; transition: transform .15s ease, box-shadow .2s ease, background-color .2s; }
+  .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 .75rem 1.5rem rgba(0,0,0,.07); background-color: #f8f9fa !important; }
+  .glow-on-hover { transition: box-shadow .2s ease, transform .05s ease; }
+  .glow-on-hover:hover { box-shadow: 0 0 0 .2rem rgba(13,110,253,.25); transform: translateY(-1px); }
+  .fade-in { animation: fadeIn .2s ease-in; }
+  @keyframes fadeIn { from {opacity:0} to {opacity:1} }
+  .soft-resize { resize: vertical; }
+  
+  .drag-handle { cursor: move; user-select: none; }
+  .modal-dialog.draggable { margin-top: 1rem; }
+  .modal-dialog.draggable .modal-content { cursor: default; }
+
+</style>
+
+<script>
+(function() {
+  const modalEl = document.getElementById('taskModal');
+  if (!modalEl) return;
+
+  const $ = (id) => modalEl.querySelector('#' + id);
+  const menu = $('repeatMenu'), label = $('repeatLabel'), repeatSelect = $('taskRecurrence'), endWrap = $('recurrence-end-date-wrapper');
+  const what = $('taskWhat');
+  const note = $('taskNote');
+  const dropzone = $('attachmentDropzone'), fileInput = $('fileInputTrigger'), queuedList = $('queuedFilesList');
+  const form = $('taskForm'), saveBtn = $('saveTaskBtn');
+  
+  const setupCounter = (el) => {
+    if (!el) return;
+    if (el.tagName === 'TEXTAREA') {
+        const grow = () => { el.style.height='auto'; el.style.height = Math.min(el.scrollHeight, 320) + 'px'; };
+        el.addEventListener('input', grow);
+        modalEl.addEventListener('shown.bs.modal', grow, { once: true });
+    }
+  };
+  setupCounter(note);
+
+  // Repeat dropdown logic
+  if (menu && repeatSelect && label && endWrap) {
+    menu.querySelectorAll('.dropdown-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const val = e.currentTarget.getAttribute('data-value');
+        label.textContent = e.currentTarget.textContent.trim();
+        repeatSelect.value = val;
+        endWrap.style.display = (val && val !== 'none') ? 'block' : 'none';
+      });
+    });
+  }
+
+  // File handling logic
+  window.queuedFiles = window.queuedFiles || [];
+  const addQueued = (files) => {
+    if (!files?.length) return;
+    queuedList.style.display = 'block';
+    [...files].forEach(f => {
+      if (window.queuedFiles.length >= 20 || f.size > 100 * 1024 * 1024) return;
+      window.queuedFiles.push(f);
+      const row = document.createElement('div');
+      row.className = 'd-flex align-items-center justify-content-between small p-1 border-bottom';
+      row.innerHTML = `<div class="text-truncate"><i class="fa-regular fa-file me-2"></i>${f.name}</div>
+        <div><span class="text-muted me-2">(${(f.size/1024).toFixed(1)} KB)</span>
+        <button type="button" class="btn-close small" title="Remove"></button></div>`;
+      row.querySelector('.btn-close').addEventListener('click', () => {
+        const i = window.queuedFiles.indexOf(f);
+        if (i > -1) window.queuedFiles.splice(i, 1);
+        row.remove();
+        if (!queuedList.children.length) queuedList.style.display='none';
+      });
+      queuedList.appendChild(row);
+    });
+  };
+  if (dropzone && fileInput) {
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('border-primary'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-primary'));
+    dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('border-primary'); addQueued(e.dataTransfer.files); });
+    fileInput.addEventListener('change', e => addQueued(e.target.files));
+    document.addEventListener('paste', e => {
+        if(modalEl.classList.contains('show')) addQueued(e.clipboardData.files);
+    });
+  }
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', (e) => {
+    if (!modalEl.classList.contains('show')) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      saveBtn?.click();
+    }
+  });
+
+  // Draggable modal logic
+  let dragging = false, startX, startY;
+  const dialog = modalEl.querySelector('.modal-dialog');
+  const header = modalEl.querySelector('.drag-handle');
+  if (dialog && header) {
+      const onDown = (e) => {
+          if (e.target.matches('button, a, input, select, textarea')) return;
+          dragging = true;
+          dialog.classList.add('draggable');
+          startX = e.clientX - dialog.getBoundingClientRect().left;
+          startY = e.clientY - dialog.getBoundingClientRect().top;
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+      };
+      const onMove = (e) => {
+          if (!dragging) return;
+          e.preventDefault();
+          let newX = e.clientX - startX;
+          let newY = e.clientY - startY;
+          const vpWidth = document.documentElement.clientWidth;
+          const vpHeight = document.documentElement.clientHeight;
+          const dialogRect = dialog.getBoundingClientRect();
+          newX = Math.max(0, Math.min(newX, vpWidth - dialogRect.width));
+          newY = Math.max(0, Math.min(newY, vpHeight - dialogRect.height));
+          dialog.style.left = `${newX}px`;
+          dialog.style.top = `${newY}px`;
+      };
+      const onUp = () => {
+          dragging = false;
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+      };
+      header.addEventListener('mousedown', onDown);
+  }
+})();
+</script>

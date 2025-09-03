@@ -1,0 +1,63 @@
+{% raw %}
+<style>
+/* CSS cho các nút lọc với bảng màu "Nóng & Năng động" */
+.btn-type-filter {
+    --project-color: #f97316;    /* Orange */
+    --build-color: #44403c;      /* Stone */
+    --objective-color: #0d9488;  /* Dark Teal */
+    --key_result-color: #f59e0b; /* Amber */
+    --task-color: #a8a29e;       /* Light Stone */
+}
+.btn-type-filter .btn { border: 1px solid #ced4da; color: #6c757d; transition: all 0.2s ease-in-out; font-weight: 500; }
+.btn-type-filter .btn[data-type="project"] { --type-color: var(--project-color); }
+.btn-type-filter .btn[data-type="build"] { --type-color: var(--build-color); }
+.btn-type-filter .btn[data-type="objective"] { --type-color: var(--objective-color); }
+.btn-type-filter .btn[data-type="key_result"] { --type-color: var(--key_result-color); }
+.btn-type-filter .btn[data-type="task"] { --type-color: var(--task-color); }
+.btn-type-filter .btn[data-type]:not([data-type="all"]).active { background-color: var(--type-color); border-color: var(--type-color); color: #fff; box-shadow: 0 3px 8px -2px var(--type-color); }
+.btn-type-filter .btn:not(.active):hover { transform: translateY(-2px); box-shadow: 0 4px 10px -3px rgba(0,0,0,0.2); }
+.btn-type-filter .btn[data-type="all"].active { background-color: #343a40; border-color: #343a40; color: #fff; }
+</style>
+
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <div id="gantt-zoom-buttons" class="btn-group btn-group-sm" role="group">
+      <button class="btn btn-outline-primary" data-zoom="day">Day</button>
+      <button class="btn btn-outline-primary" data-zoom="week">Week</button>
+      <button class="btn btn-outline-primary active" data-zoom="month">Month</button>
+      <button class="btn btn-outline-primary" data-zoom="year">Year</button>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" id="btnToday">Today</button>
+    <button class="btn btn-outline-secondary btn-sm" id="btnFit">Fit</button>
+    <div class="input-group input-group-sm" style="width:240px;">
+      <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <input id="ganttSearch" class="form-control" placeholder="Search tasks...">
+    </div>
+    <div class="input-group input-group-sm" style="width:220px;">
+      <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+      <select id="ownerFilter" class="form-select"><option value="">All assignees</option></select>
+    </div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="toggleDone" checked>
+      <label class="form-check-label small" for="toggleDone">Show done</label>
+    </div>
+  </div>
+</header>
+
+<div class="d-flex justify-content-center mb-3">
+    <div id="ganttTypeFilter" class="btn-group btn-group-sm btn-type-filter">
+        <button class="btn active" data-type="all">All</button>
+        <button class="btn active" data-type="project">Project</button>
+        <button class="btn active" data-type="build">Build</button>
+        <button class="btn active" data-type="objective">Objective</button>
+        <button class="btn active" data-type="key_result">KR</button>
+        <button class="btn active" data-type="task">Task</button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div id="gantt_here" style="width:100%; height:620px;"></div>
+  </div>
+</div>
+{% endraw %}

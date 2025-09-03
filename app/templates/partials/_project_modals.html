@@ -1,0 +1,320 @@
+<!-- Add Project Modal -->
+<div class="modal fade" id="addProjectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="{{ url_for('main.add_project') }}" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Add New Project</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Project Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Start Date</label>
+              <input type="date" name="start_date" class="form-control">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">End Date</label>
+              <input type="date" name="end_date" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+              {% for s in status_choices %}
+              <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Save Project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Project Modal -->
+<div class="modal fade" id="editProjectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="editProjectForm" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Project</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Project Name</label>
+            <input type="text" id="editProjectName" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea id="editProjectDescription" name="description" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Start Date</label>
+              <input type="date" id="editProjectStartDate" name="start_date" class="form-control">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">End Date</label>
+              <input type="date" id="editProjectEndDate" name="end_date" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Status</label>
+            <select id="editProjectStatus" name="status" class="form-select">
+              {% for s in status_choices %}
+              <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Update Project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Build Modal -->
+<div class="modal fade" id="addBuildModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="{{ url_for('main.add_build') }}" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Add New Build</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Build Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Project</label>
+            <select name="project_id" class="form-select" required>
+              <option value="">-- Select Project --</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}" {% if p.id == selected_project_id %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Schedule Link</label>
+            <input type="url" name="schedule_link" class="form-control" placeholder="https://docs.google.com/spreadsheets/...">
+          </div>		  
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Start Date</label>
+              <input type="date" name="start_date" class="form-control">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">End Date</label>
+              <input type="date" name="end_date" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Save Build</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Build Modal -->
+<div class="modal fade" id="editBuildModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="editBuildForm" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Build</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Build Name</label>
+            <input type="text" id="editBuildName" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Project</label>
+            <select id="editBuildProject" name="project_id" class="form-select" required>
+              <option value="">-- Select Project --</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Start Date</label>
+              <input type="date" id="editBuildStartDate" name="start_date" class="form-control">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">End Date</label>
+              <input type="date" id="editBuildEndDate" name="end_date" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Schedule Link</label>
+            <input type="url" id="editBuildScheduleLink" name="schedule_link" class="form-control" placeholder="https://docs.google.com/spreadsheets/...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Update Build</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Objective Modal -->
+<div class="modal fade" id="addObjectiveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Objective Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="objectiveForm" action="{{ url_for('main.add_objective') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="objective_id" value="">
+                    <div class="mb-3">
+                        <label class="form-label">Objective Content</label>
+                        <input type="text" name="content" class="form-control" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Owner</label>
+                            <select name="owner_id" class="form-select">
+                                <option value="">Owner...</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Project</label>
+                            <select name="project_id" class="form-select">
+                                <option value="">Project...</option>
+                                {% for p in projects %}
+                                <option value="{{ p.id }}">{{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Build</label>
+                            <select name="build_id" class="form-select">
+                                <option value="">Build...</option>
+                                {% for b in builds %}
+                                <option value="{{ b.id }}">{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" name="start_date_obj" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End Date</label>
+                            <input type="date" name="end_date_obj" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Objective</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Key Result Modal -->
+<div class="modal fade" id="krModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="addKrForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Key Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="objectiveId" name="objective_id">
+                    <div class="mb-3">
+                        <label class="form-label">Content</label>
+                        <input type="text" class="form-control" id="krContent" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" id="krStartDate" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End Date</label>
+                            <input type="date" id="krEndDate" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Key Result Modal -->
+<div class="modal fade" id="krEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editKrForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Key Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editKrId">
+                    <div class="mb-3">
+                        <label class="form-label">Content</label>
+                        <input type="text" class="form-control" id="editKrContent" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" id="editKrStartDate" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End Date</label>
+                            <input type="date" id="editKrEndDate" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

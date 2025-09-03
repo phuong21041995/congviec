@@ -1,173 +1,155 @@
 {% extends "base.html" %}
-{% block title %}OKR{% endblock %}
+{% block title %}OKR Dashboard{% endblock %}
 
 {% block styles %}
 <style>
-    body { background-color: #f0f2f5; }
-    .objective-block {
-        background-color: #ffffff;
-        border: 1px solid #dee2e6;
-        border-radius: .5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        transition: opacity 0.3s ease-in-out;
-    }
+    .stat-card { border-left: 5px solid var(--bs-primary); transition: transform 0.2s, box-shadow 0.2s; }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1); }
+    .project-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+    .project-card:hover { transform: translateY(-5px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1); border-color: var(--bs-primary)!important; }
+    .project-card .card-footer { background-color: #f8f9fa; }
+    .nav-tabs .nav-link { font-weight: 500; }
+
+    .objective-block { background:#fff; border:1px solid #dee2e6; border-radius:.5rem; margin-bottom:1.5rem; box-shadow:0 1px 3px rgba(0,0,0,.05); transition:opacity .3s; }
     .objective-header {
-        padding: 1rem 1.25rem;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        cursor: pointer;
-        background-image: linear-gradient(to bottom, var(--obj-color, #0d6efd), color-mix(in srgb, var(--obj-color, #0d6efd) 85%, black));
-        border-top-left-radius: .5rem;
-        border-top-right-radius: .5rem;
+        padding:1rem 1.25rem; color:#fff; display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+        background-image:linear-gradient(to bottom, var(--obj-color,#0d6efd), color-mix(in srgb, var(--obj-color,#0d6efd) 85%, black));
+        border-top-left-radius:.5rem; border-top-right-radius:.5rem;
     }
-    .objective-header.collapsed {
-        border-bottom-left-radius: .5rem;
-        border-bottom-right-radius: .5rem;
-    }
-    .objective-title { font-size: 1.2rem; font-weight: 500; display: flex; align-items: center; gap: 0.75rem; flex-grow: 1; min-width: 0; }
-    .objective-title .editable-content {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .kr-container { padding: 0 1.25rem 1.25rem 1.25rem; }
-    .kr-block { border-top: 1px solid #f1f3f5; padding: 1rem 0; transition: opacity 0.3s ease-in-out; }
-    .kr-header { display: flex; align-items: center; justify-content: space-between; font-weight: 500; }
-    .action-item { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        padding-top: 1rem; 
-        transition: opacity 0.3s ease-in-out; 
-    }
-    .action-content { display: flex; align-items: center; flex-grow: 1; min-width: 0; }
-    .action-text {
-        word-break: break-all;
-        cursor: pointer;
-    }
-    .action-text.done { text-decoration: line-through; color: #6c757d; }
-    .action-meta { 
-        display: flex; 
-        align-items: center; 
-        margin-left: 1rem; 
-        gap: 0.5rem;
-        flex-shrink: 0;
-    }
-    .delete-btn { background: none; border: none; color: #adb5bd; opacity: 0.6; }
-    .objective-header .delete-btn { color: white; }
-    .delete-btn:hover { color: #dc3545; opacity: 1; }
-    .collapse-icon { transition: transform 0.2s ease-in-out; }
-    .objective-header.collapsed .collapse-icon { transform: rotate(-90deg); }
-    .editable-content { padding: 2px 4px; border-radius: 3px; transition: background-color 0.2s; }
-    .objective-header .editable-content:hover { background-color: rgba(0,0,0,0.1); }
-    .kr-block .editable-content:hover { background-color: #e9ecef; }
-    .action-item.overdue {
-        border-left: 3px solid #dc3545;
-        background-color: #f8d7da;
-        padding-left: 1rem;
-    }
-    .action-item.overdue .action-text {
-        font-weight: bold;
-    }
-    .action-text-container { flex-grow: 1; }
-    .action-text-container .action-text {
-        cursor: text;
-    }
-    .log-panel {
-        font-size: 0.85rem;
-    }
+    .kr-container { padding:0 1.25rem 1.25rem 1.25rem; }
+    .kr-block { border-top:1px solid #f1f3f5; padding:1rem 0; transition:opacity .3s; }
+    .action-item { display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; transition:opacity .3s; }
+    .action-text { cursor:pointer; }
+    .action-text.done { text-decoration:line-through; color:#6c757d; }
+    .delete-btn { background:none; border:none; color:#adb5bd; opacity:.6; }
+    .delete-btn:hover { color:#dc3545; opacity:1; }
+    .btn-icon { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<header class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="m-0"><i class="fa-solid fa-bullseye me-2"></i>OKR</h2>
-    <div class="d-flex align-items-center">
-        <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=prev_period_date) }}" class="btn btn-outline-secondary"><i class="fa-solid fa-chevron-left"></i></a>
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="m-0"><i class="fa-solid fa-bullseye me-2"></i>OKR Dashboard</h2>
+    <div class="d-flex align-items-center flex-wrap gap-2">
+        <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=prev_period_date) }}" class="btn btn-outline-secondary" title="Previous"><i class="fa-solid fa-chevron-left"></i></a>
         <h4 class="m-0 text-primary mx-3" style="min-width: 250px; text-align: center;">{{ date_display }}</h4>
-        <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=next_period_date) }}" class="btn btn-outline-secondary"><i class="fa-solid fa-chevron-right"></i></a>
-    </div>
-    <div class="btn-group">
+        <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=next_period_date) }}" class="btn btn-outline-secondary" title="Next"><i class="fa-solid fa-chevron-right"></i></a>
         <div class="btn-group">
-            <button type="button" class="btn btn-outline-primary {% if view_mode == 'week' %}active{% endif %} dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Week</button>
-            <ul class="dropdown-menu" style="max-height: 280px; overflow-y: auto;">
-                {% for week in weeks_in_year %}<li><a class="dropdown-item" href="{{ url_for('main.okr_page', view_mode='week', date_str=week.date_str) }}">Week {{ week.num }}</a></li>{% endfor %}
-            </ul>
+            <a href="{{ url_for('main.okr_page', view_mode='week', date_str=today_date_str) }}" class="btn btn-outline-primary {% if view_mode == 'week' %}active{% endif %}">Week</a>
+            <a href="{{ url_for('main.okr_page', view_mode='month', date_str=today_date_str) }}" class="btn btn-outline-primary {% if view_mode == 'month' %}active{% endif %}">Month</a>
+            <a href="{{ url_for('main.okr_page', view_mode='year', date_str=today_date_str) }}" class="btn btn-outline-primary {% if view_mode == 'year' %}active{% endif %}">Year</a>
         </div>
-        <div class="btn-group">
-            <button type="button" class="btn btn-outline-primary {% if view_mode == 'month' %}active{% endif %} dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Month</button>
-            <ul class="dropdown-menu">
-                {% for month in months_in_year %}<li><a class="dropdown-item" href="{{ url_for('main.okr_page', view_mode='month', date_str=month.date_str) }}">{{ month.name }}</a></li>{% endfor %}
-            </ul>
-        </div>
-        <a href="{{ url_for('main.okr_page', view_mode='year', date_str=date_str) }}" class="btn btn-outline-primary {% if view_mode == 'year' %}active{% endif %}">Year</a>
-        <a href="{{ url_for('main.okr_page', view_mode='week', date_str=today_date_str) }}" class="btn btn-primary ms-3">This week</a>
+        <button class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#addObjectiveModal"><i class="fa-solid fa-plus me-2"></i>New Objective</button>
     </div>
 </header>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}{% for category, message in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    {% endfor %}{% endif %}
-{% endwith %}
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs mb-4" id="okrTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview-tab-pane" type="button" role="tab">
+            <i class="fa-solid fa-chart-pie me-2"></i>Tổng quan
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details-tab-pane" type="button" role="tab">
+            <i class="fa-solid fa-list-check me-2"></i>Chi tiết OKR
+        </button>
+    </li>
+</ul>
 
-<div class="row">
-    <div class="col-lg-8" id="okr-main-column">
+<!-- Tabs Content -->
+<div class="tab-content" id="okrTabContent">
+    <!-- Overview Tab Pane -->
+    <div class="tab-pane fade" id="overview-tab-pane" role="tabpanel">
+        <div class="row mb-4">
+            <div class="col-md-4"><div class="card stat-card shadow-sm"><div class="card-body"><h5 class="card-title text-muted">Total Objectives</h5><p class="card-text fs-2 fw-bold">{{ total_stats.o }}</p></div></div></div>
+            <div class="col-md-4"><div class="card stat-card shadow-sm" style="border-left-color: var(--bs-success);"><div class="card-body"><h5 class="card-title text-muted">Total Key Results</h5><p class="card-text fs-2 fw-bold">{{ total_stats.kr }}</p></div></div></div>
+            <div class="col-md-4"><div class="card stat-card shadow-sm" style="border-left-color: var(--bs-warning);"><div class="card-body"><h5 class="card-title text-muted">Total Tasks</h5><p class="card-text fs-2 fw-bold">{{ total_stats.task }}</p></div></div></div>
+        </div>
+
+        <h4 class="mb-3">By Project</h4>
+        <div class="row">
+            {% for project_id, stats in stats_by_project.items() %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=date_str, project_id=project_id, tab='details') }}" class="text-decoration-none">
+                    <div class="card project-card h-100 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">{{ stats.name }}</h5>
+                            <div class="d-flex justify-content-around text-center my-3">
+                                <div><div class="fs-4 fw-bold">{{ stats.o_count }}</div><small class="text-muted">Objectives</small></div>
+                                <div><div class="fs-4 fw-bold">{{ stats.kr_count }}</div><small class="text-muted">Key Results</small></div>
+                                <div><div class="fs-4 fw-bold">{{ stats.task_count }}</div><small class="text-muted">Tasks</small></div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <small class="text-muted">Overall Progress</small>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar" role="progressbar" style="width: {{ stats.avg_progress }}%;" aria-valuenow="{{ stats.avg_progress }}">{{ stats.avg_progress | round }}%</div>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% else %}
+            <div class="col-12"><div class="alert alert-info">No projects with OKRs found in this period.</div></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Details Tab Pane -->
+    <div class="tab-pane fade" id="details-tab-pane" role="tabpanel">
+        {% if project_filter_id is not none %}
+        <div class="alert alert-primary d-flex justify-content-between align-items-center">
+            <span>Showing OKRs for project: <strong>{{ filtered_project_name }}</strong></span>
+            <a href="{{ url_for('main.okr_page', view_mode=view_mode, date_str=date_str, tab='details') }}" class="btn btn-sm btn-light">Clear Filter</a>
+        </div>
+        {% endif %}
+
         {% for obj in objectives %}
         <div class="objective-block" data-obj-id="{{ obj.id }}">
             <div class="objective-header" data-bs-toggle="collapse" data-bs-target="#kr-container-{{ obj.id }}" aria-expanded="true" style="--obj-color: {{ obj.color }};">
-                <div class="objective-title">
+                <div class="d-flex align-items-center flex-grow-1 min-width-0">
                     <i class="fa-solid fa-crosshairs me-2"></i>
-                    <span class="editable-content" data-type="objective" data-id="{{ obj.id }}"><strong>O{{ loop.index }}: {{ obj.content }}</strong></span>
+                    <span class="text-truncate"><strong>O{{ loop.index }}: {{ obj.content }}</strong></span>
                     {% if obj.owner %}<span class="badge bg-light text-dark ms-2">{{ obj.owner.username }}</span>{% endif %}
-                    {% if obj.project %}<span class="badge bg-secondary ms-2">{{ obj.project.name }}</span>{% endif %}
                 </div>
                 <div class="d-flex align-items-center">
-                    <div class="progress me-3" style="width: 100px; height: 10px; background-color: rgba(0,0,0,0.2);" title="Over progress">
-                        <div id="obj-progress-bar-{{ obj.id }}" class="progress-bar bg-light" role="progressbar" style="width: {{ obj.progress }}%;" aria-valuenow="{{ obj.progress }}"></div>
+                    <div class="progress me-3" style="width: 100px; height: 10px; background-color: rgba(0,0,0,0.2);">
+                        <div id="obj-progress-bar-{{ obj.id }}" class="progress-bar bg-light" role="progressbar" style="width: {{ obj.progress }}%;"></div>
                     </div>
                     <span id="obj-progress-text-{{ obj.id }}" class="badge bg-light text-dark rounded-pill me-3">{{ obj.progress | round }}%</span>
                     <button class="btn btn-sm btn-outline-light me-2" onclick="event.stopPropagation(); openKrModal({{ obj.id }});" title="Add Key Result"><i class="fa-solid fa-plus"></i></button>
+                    <button class="btn btn-sm btn-outline-light me-2" onclick="event.stopPropagation(); openEditObjectiveModal({{ obj.id }});" title="Edit Objective"><i class="fa-solid fa-pen"></i></button>
                     <button class="delete-btn" data-type="objective" data-id="{{ obj.id }}" title="Delete Objective"><i class="fa-solid fa-trash-can"></i></button>
-                    <i class="fa-solid fa-chevron-down ms-3 collapse-icon"></i>
                 </div>
             </div>
             <div class="kr-container collapse show" id="kr-container-{{ obj.id }}">
                 {% for kr in obj.key_results %}
                 <div class="kr-block" data-kr-id="{{ kr.id }}">
-                    <div class="kr-header">
-                        <div><i class="fa-solid fa-flag me-2 text-success"></i><span class="editable-content" data-type="key_result" data-id="{{ kr.id }}"><strong>KR{{ loop.index }}: {{ kr.content }}</strong></span></div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div><i class="fa-solid fa-flag me-2 text-success"></i><span><strong>KR{{ loop.index }}: {{ kr.content }}</strong></span></div>
                         <div class="d-flex align-items-center">
                             <span class="badge bg-secondary me-2" id="kr-progress-text-{{kr.id}}">{{ kr.current|round }}/{{ kr.target|round }}</span>
-                            <button class="btn btn-sm btn-outline-primary me-2 add-action-btn" data-kr-id="{{ kr.id }}" title="Add Action"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-sm btn-outline-primary me-2 add-task-btn" data-kr-id="{{ kr.id }}" title="Add Task"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary me-2 edit-kr-btn" data-kr-id="{{ kr.id }}" data-kr-content="{{ kr.content|e }}" title="Edit Key Result"><i class="fa-solid fa-pen"></i></button>
                             <button class="delete-btn" data-type="key_result" data-id="{{ kr.id }}" title="Delete Key Result"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
                     </div>
                     <div class="progress mt-1" style="height: 5px;">
-                        <div id="kr-progress-bar-{{kr.id}}" class="progress-bar" role="progressbar" style="width: {{ kr.progress }}%;" aria-valuenow="{{ kr.progress }}"></div>
+                        <div id="kr-progress-bar-{{kr.id}}" class="progress-bar" role="progressbar" style="width: {{ kr.progress }}%;"></div>
                     </div>
-                    <div class="actions-container mt-2">
-                        {% for action in kr.action_items %}
-                        {% set is_overdue = action.due_date and action.due_date < today_date_obj %}
-                        <div class="action-item {% if is_overdue %}overdue{% endif %}" data-action-id="{{ action.id }}">
-                            <div class="action-content">
-                                <input type="checkbox" class="form-check-input me-3 action-checkbox" data-id="{{ action.id }}" {% if action.status == 'Done' %}checked{% endif %}>
-                                <div class="action-text-container">
-                                    <div class="action-text {% if action.status == 'Done' %}done{% endif %}" id="action-content-{{ action.id }}" data-id="{{ action.id }}" ondblclick="event.stopPropagation(); editActionContent(this);">
-                                        Act.{{ loop.index }}: {{ action.content | safe }}
-                                    </div>
-                                </div>
+                    <div class="tasks-container mt-2">
+                        {% for task in kr.tasks %}
+                        <div class="action-item" data-task-id="{{ task.id }}" data-task-json='{{ task.to_dict()|tojson|safe }}'>
+                            <div class="d-flex align-items-center flex-grow-1 min-width-0">
+                                <input type="checkbox" class="form-check-input me-3 task-checkbox" data-id="{{ task.id }}" {% if task.status == 'Done' %}checked{% endif %}>
+                                <div class="action-text text-truncate {% if task.status == 'Done' %}done{% endif %}" data-type="task" data-id="{{ task.id }}">{{ task.what }}</div>
                             </div>
-                            <div class="action-meta">
-                                {% if action.assignee %}<span class="badge bg-info-subtle text-info-emphasis mb-1">{{ action.assignee.username }}</span>{% endif %}
-                                {% if action.due_date %}<span class="badge bg-warning-subtle text-warning-emphasis mb-1 action-due-date">{{ action.due_date.strftime('%d/%m') }}</span>{% endif %}
-                                <button class="delete-btn" data-type="action_item" data-id="{{ action.id }}"><i class="fa-solid fa-trash-can"></i></button>
-                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="window.location.href='{{ url_for('main.action_detail', action_id=action.id) }}'"><i class="fa-solid fa-file-pen"></i></button>
+                            <div class="d-flex align-items-center flex-shrink-0">
+                                {% if task.assignee %}<span class="badge bg-info-subtle text-info-emphasis me-2">{{ task.assignee.username }}</span>{% endif %}
+                                {% if task.task_date %}<span class="badge bg-warning-subtle text-warning-emphasis me-2">{{ task.task_date.strftime('%d/%m') }}</span>{% endif %}
+                                <button class="btn btn-sm btn-outline-secondary open-task-modal-btn me-2" title="Edit Task"><i class="fa-solid fa-file-pen"></i></button>
+                                <button class="delete-btn" data-type="task" data-id="{{ task.id }}" title="Delete Task"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </div>
                         {% endfor %}
@@ -176,130 +158,146 @@
                 {% endfor %}
             </div>
         </div>
+        {% else %}
+        <div class="alert alert-info">No OKRs to display. Select a project from the Overview tab or create a new Objective.</div>
         {% endfor %}
-        
-        <div class="card mt-4">
-            <div class="card-header"><h5 class="m-0"><i class="fa-solid fa-plus me-2"></i>Add new Objective</h5></div>
-            <div class="card-body">
-                <form action="{{ url_for('main.add_objective') }}" method="POST">
-                    <input type="hidden" name="view_mode" value="{{ view_mode }}">
-                    <input type="hidden" name="start_date" value="{{ date_str }}">
-                    <div class="input-group">
-                        <input type="text" name="content" class="form-control" placeholder="Input new title..." required>
-                        <select name="owner_id" class="form-select flex-grow-0" style="width: 150px;"><option value="">Owner...</option>{% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}</select>
-                        <select name="project_id" class="form-select flex-grow-0" style="width: 150px;"><option value="">Project...</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select>
-                        <button class="btn btn-primary" type="submit">Add Objective</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card shadow-sm mb-3">
-            <div class="card-header"><h5 class="m-0"><i class="fa-solid fa-lightbulb me-2"></i>Kaizen</h5></div>
-            <div class="card-body">
-                 {% if kaizen_items %}{% for item in kaizen_items %}<div class="mb-3"><p class="mb-1"><strong>Issue:</strong> {{ item.problem }}</p><p class="text-muted mb-0"><em><strong>Solution:</strong> {{ item.solution or 'Not yet' }}</em></p></div><hr>{% endfor %}{% else %}<p class="text-muted">No Kaizen idea</p>{% endif %}
-            </div>
-            <div class="card-footer">
-                <form action="{{ url_for('main.save_kaizen') }}" method="POST">
-                    <input type="hidden" name="view_mode" value="{{ view_mode }}">
-                    <input type="hidden" name="date_str" value="{{ date_str }}">
-                    <div class="mb-2"><label class="form-label fw-bold">Issue</label><input type="text" class="form-control" name="problem" required></div>
-                    <div class="mb-2"><label class="form-label">Idea/ Solution</label><input type="text" class="form-control" name="solution"></div>
-                    <button class="btn btn-info w-100" type="submit">Save Kaizen</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Panel Nhật Ký Thay Đổi -->
-        <div class="card shadow-sm flex-fill d-flex flex-column mt-3">
-            <h5 class="card-header bg-dark text-white"><i class="fa-solid fa-timeline me-2"></i>History</h5>
-            <div class="card-body log-panel" style="overflow-y: auto; max-height: 400px;">
-                <ul class="list-group list-group-flush">
-                    {% for log in logs %}
-                    <li class="list-group-item">
-                        #<small class="text-muted">{{ log.timestamp.strftime('%d/%m %H:%M') }}</small>
-						<small class="text-muted">{{ log.timestamp | to_local_time }}</small>
-                        <p class="mb-0">
-                            {% if log.user %}
-                                <strong class="text-primary">{{ log.user.username }}</strong>
-                            {% endif %}
-                            {{ log.action }}
-                        </p>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item">Nothing</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
     </div>
 </div>
 
+<!-- Modals -->
+{% include 'partials/_task_modal.html' %}
+
+<!-- Offcanvas for Task Details -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="taskDetailOffcanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="fa-solid fa-list-check me-2"></i>Job Detail</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body" id="taskDetailBody"></div>
+</div>
+
+<!-- Add/Edit Objective Modal -->
+<div class="modal fade" id="addObjectiveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Add New Objective</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <!-- KHÔNG đặt action để JS intercept 100% -->
+        <form id="objectiveForm" method="POST">
+            <div class="modal-body">
+                <input type="hidden" name="objective_id" value="">
+                <input type="hidden" name="view_mode" value="{{ view_mode }}">
+                <input type="hidden" name="start_date" value="{{ date_str }}">
+                <div class="mb-3">
+                    <label class="form-label">Objective Content</label>
+                    <input type="text" name="content" class="form-control" placeholder="Enter new objective..." required>
+                </div>
+                <div class="row">
+                    <div class="col-md-4"><label class="form-label">Owner</label><select name="owner_id" class="form-select"><option value="">Owner...</option>{% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}</select></div>
+                    <div class="col-md-4"><label class="form-label">Project</label><select name="project_id" class="form-select"><option value="">Project...</option>{% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}</select></div>
+                    <div class="col-md-4"><label class="form-label">Build</label><select name="build_id" class="form-select"><option value="">Build...</option>{% for build in builds %}<option value="{{ build.id }}">{{ build.name }}</option>{% endfor %}</select></div>
+                </div>
+				<!-- THÊM DÒNG NÀY VÀO -->
+				<div class="row mt-3">
+					<div class="col-md-6">
+						<label class="form-label">Start Date</label>
+						<input type="date" name="start_date_obj" class="form-control">
+					</div>
+					<div class="col-md-6">
+						<label class="form-label">End Date</label>
+						<input type="date" name="end_date_obj" class="form-control">
+					</div>
+				</div>
+			</div>				
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button class="btn btn-primary" type="submit">Save Objective</button></div>
+        </form>
+    </div></div>
+</div>
+
+<!-- Add Key Result Modal -->
 <div class="modal fade" id="krModal" tabindex="-1">
     <div class="modal-dialog"><div class="modal-content">
         <form id="addKrForm">
             <div class="modal-header"><h5 class="modal-title">Add Key Result</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <input type="hidden" id="objectiveId" name="objective_id">
-                <div class="mb-3"><label for="krContent" class="form-label">Content Key Result</label><input type="text" class="form-control" id="krContent" name="content" required></div>
+                <div class="mb-3">
+                    <label for="krContent" class="form-label">Content Key Result</label>
+                    <input type="text" class="form-control" id="krContent" name="content" required>
+                </div>
+                <!-- THÊM MỚI: Trường Start Date và End Date -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" id="addKrStartDate" name="start_date" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">End Date</label>
+                        <input type="date" id="addKrEndDate" name="end_date" class="form-control">
+                    </div>
+                </div>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="submit" class="btn btn-primary">Save</button></div>
         </form>
     </div></div>
 </div>
 
-<div class="modal fade" id="actionModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Add action</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+
+<!-- Edit Key Result Modal -->
+<div class="modal fade" id="krEditModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form id="editKrForm">
+            <div class="modal-header"><h5 class="modal-title">Edit Key Result</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="editKrId" name="kr_id">
+                <div class="mb-3">
+                    <label for="editKrContent" class="form-label">Content</label>
+                    <input type="text" class="form-control" id="editKrContent" name="content" required>
+                </div>
+                <!-- THÊM MỚI: Trường Start Date và End Date -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" id="editKrStartDate" name="start_date" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">End Date</label>
+                        <input type="date" id="editKrEndDate" name="end_date" class="form-control">
+                    </div>
+                </div>
             </div>
-            <form id="addActionForm">
-                <div class="modal-body">
-                    <input type="hidden" name="key_result_id" id="actionModalKrId">
-                    <input type="hidden" name="view_mode" value="{{ view_mode }}">
-                    <input type="hidden" name="date_str" value="{{ date_str }}">
-                    <div class="mb-3">
-                        <label for="actionContent" class="form-label">Action content</label>
-                        <input type="text" class="form-control" id="actionContent" name="content" required>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="actionAssignee" class="form-label">Give to</label>
-                            <select name="assignee_id" id="actionAssignee" class="form-select">
-                                <option value="">No</option>
-                                {% for user in users %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="actionDueDate" class="form-label">Happy date</label>
-                            <input type="date" class="form-control" id="actionDueDate" name="due_date">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-primary">Save Action</button>
-                </div>
-            </form>
-        </div>
-    </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="submit" class="btn btn-primary">Update</button></div>
+        </form>
+    </div></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='vendor/confetti/confetti.browser.min.js') }}"></script>
-
 <script>
-	const UPLOAD_IMAGE_URL = "{{ url_for('main.upload_image') }}";
-    const ADD_KEY_RESULT_URL = "{{ url_for('main.add_key_result') }}";
-    const ADD_ACTION_URL = "{{ url_for('main.add_action_item') }}";
-    const UPDATE_ITEM_URL_BASE = "{{ url_for('main.update_item', item_type='-', item_id=0) }}".replace('/-/0', '/');
-    const UPDATE_ACTION_URL_BASE = "{{ url_for('main.update_action', action_id=0) }}".replace('/0', '/');
-    const DELETE_ITEM_URL_BASE = "{{ url_for('main.delete_item', item_type='-', item_id=0) }}".replace('/-/0', '/');
-    const UPDATE_ACTION_STATUS_URL_BASE = "{{ url_for('main.update_action_status', action_id=0) }}".replace('/0', '/');
+    // GLOBAL URLs
+    window.ADD_OBJECTIVE_URL = "{{ url_for('main.add_objective') }}";
+    window.ADD_KEY_RESULT_URL = "{{ url_for('main.add_key_result') }}";
+	window.UPDATE_ITEM_URL_BASE = "{{ url_for('main.update_okr_item', item_type='-', item_id=0) }}".replace('/-/0', '/');
+    window.DELETE_ITEM_URL_BASE = "{{ url_for('main.delete_item', item_type='-', item_id=0) }}".replace('/-/0', '/');
+    window.UPDATE_TASK_STATUS_URL_BASE = "{{ url_for('main.update_task_from_okr', task_id=0) }}".replace('/0', '/');
+    window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
+    window.CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
 </script>
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
 <script src="{{ url_for('static', filename='js/okr.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Fallback to localStorage if URL has no ?tab=
+    const params = new URLSearchParams(location.search);
+    let tab = params.get('tab');
+    if (!tab) tab = localStorage.getItem('okr_active_tab') || 'overview';
+    const trigger = document.querySelector(tab === 'details' ? '#details-tab' : '#overview-tab');
+    if (trigger) new bootstrap.Tab(trigger).show();
+
+    // Remember last chosen tab
+    document.querySelectorAll('#okrTab .nav-link').forEach(btn=>{
+        btn.addEventListener('shown.bs.tab', e=>{
+            const id=e.target.id; localStorage.setItem('okr_active_tab', id.startsWith('details')?'details':'overview');
+        });
+    });
+});
+</script>
 {% endblock %}

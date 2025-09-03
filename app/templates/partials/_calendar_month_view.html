@@ -23,14 +23,17 @@
                         title="Double click to check detail">
                         <div class="day-number">{{ day.day }}</div>
 						{% for task in tasks_for_day[:10] %}
-                            <div class="task-item-sm status-{{ task['status'] | lower | replace(' ', '-') }}" 
-                                 title="{{ task['what'] }}"
-                                 data-task-id="{{ task['id'] }}"
-                                 data-task-json='{{ task | tojson | safe }}'
-                            </div>
-                                <i class="fa-solid fa-circle fa-xs"></i>
-                                <span>{{ task['what'] }}</span>
-                            </div>
+							<div class="task-item-sm status-{{ task['status'] | lower | replace(' ', '-') }}" 
+								 title="{{ task['what'] }}{% if task['who'] %} - {{ task['who'] }}{% endif %}"
+								 data-task-id="{{ task['id'] }}"
+								 data-task-json='{{ task | tojson | safe }}'
+							>
+								<i class="fa-solid fa-circle fa-xs"></i>
+								<span class="flex-grow-1 text-truncate">{{ task['what'] }}</span>
+								{% if task['who'] %}
+									<span class="ms-1 small text-muted flex-shrink-0">({{ task['who'] }})</span>
+								{% endif %}
+							</div>
                         {% endfor %}
                         {% if tasks_for_day|length > 10 %}
                             <div class="more-tasks-link">

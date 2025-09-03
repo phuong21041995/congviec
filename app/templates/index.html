@@ -2,7 +2,23 @@
 {% block title %}Plan{% endblock %}
 
 {% block styles %}
+
 <style>
+	.highlight-today {
+	background-color: rgba(25, 135, 84, 0.15) !important;
+	box-shadow: inset 0 0 0 2px rgba(25, 135, 84, 0.4);
+	border-radius: 4px;
+	transition: all 0.3s ease-in-out;
+	}
+	.task-what-truncate {
+	  display: inline-block;
+	  max-width: 100%;
+	  overflow: hidden;
+	  text-overflow: ellipsis;
+	  white-space: nowrap;
+	  flex-grow: 1;
+	}
+
 
 	/* Style cho ô được click để tạo sự kiện mới */
 	.task-cell.cell-creating {
@@ -75,6 +91,8 @@
 {% endblock %}
 
 {% block content %}
+<td class="{% if day_str == today_date_str %}table-primary{% endif %}">
+
 <header class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="m-0"><i class="fa-solid fa-calendar-days me-2"></i>Working</h2>
   
@@ -165,10 +183,13 @@
 				<div class="timed-task-item status-{{ task.status | lower | replace(' ', '-') }}"
 					 data-task-id="{{ task['id'] }}"
 					 data-task-json='{{ task | tojson | safe }}'>
-					<strong>{{ task['what'] }}</strong>
-					{% if task.who %}
-						<span class="text-muted small"> ({{ task.who }})</span>
-					{% endif %}
+
+					<div class="d-flex justify-content-between align-items-center">
+						<span class="task-what-truncate">{{ task['what'] }}</span>
+						{% if task.who %}
+							<span class="text-muted small ms-1 flex-shrink-0">({{ task.who }})</span>
+						{% endif %}
+					</div>
 				</div>
               {% endif %}
             {% endfor %}
@@ -183,13 +204,16 @@
               {% set tasks_for_day = tasks_by_date.get(date_str, []) %}
               {% for task in tasks_for_day %}
                 {% if task.hour == hour %}
-                  <div class="timed-task-item status-{{ task.status | lower | replace(' ', '-') }}"
+				<div class="timed-task-item status-{{ task.status | lower | replace(' ', '-') }}"
 					 data-task-id="{{ task['id'] }}"
 					 data-task-json='{{ task | tojson | safe }}'>
-					<strong>{{ task['what'] }}</strong>
-					{% if task.who %}
-						<span class="text-muted small"> ({{ task.who }})</span>
-					{% endif %}
+
+					<div class="d-flex justify-content-between align-items-center">
+						<span class="task-what-truncate">{{ task['what'] }}</span>
+						{% if task.who %}
+							<span class="text-muted small ms-1 flex-shrink-0">({{ task.who }})</span>
+						{% endif %}
+					</div>
 				</div>
                 {% endif %}
               {% endfor %}

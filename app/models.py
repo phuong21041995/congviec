@@ -3,6 +3,7 @@ from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import url_for
+import json
 
 
 # ==============================================================================
@@ -17,7 +18,6 @@ class User(UserMixin, db.Model):
 
     tasks = db.relationship('Task', backref='assignee')
     objectives = db.relationship('Objective', backref='owner')
-    action_items = db.relationship('ActionItem', backref='assignee')
     uploaded_files = db.relationship('UploadedFile', backref='uploader')
     logs = db.relationship('Log', back_populates='user')
     notes = db.relationship('Note', back_populates='creator', lazy='dynamic', cascade="all, delete-orphan")
@@ -42,31 +42,38 @@ class User(UserMixin, db.Model):
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    task_date = db.Column(db.Date, nullable=False, index=True)
+    task_date = db.Column(db.Date, nullable=True, index=True)
     hour = db.Column(db.Integer, nullable=True)
     what = db.Column(db.String(255), nullable=False)
     who_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     status = db.Column(db.String(50), default='Pending')
     note = db.Column(db.Text)
+    report = db.Column(db.Text)
     recurrence = db.Column(db.String(20), default='none')
     recurrence_end_date = db.Column(db.Date)
+    priority = db.Column(db.String(20), default='Medium') # Thêm cột priority
     
     attachments = db.relationship('UploadedFile', backref='task', cascade="all, delete-orphan")
+    key_result_id = db.Column(db.Integer, db.ForeignKey('key_result.id'), nullable=True)
 
     def to_dict(self):
-        return {
+        data = {
             'id': self.id,
-            'date': self.task_date.strftime('%Y-%m-%d'),
+            'date': self.task_date.strftime('%Y-%m-%d') if self.task_date else None,
             'hour': self.hour,
             'what': self.what,
             'who': self.assignee.username if self.assignee else '',
             'who_id': self.who_id,
             'status': self.status,
             'note': self.note,
+            'report': self.report,
             'recurrence': self.recurrence,
             'recurrence_end_date': self.recurrence_end_date.strftime('%Y-%m-%d') if self.recurrence_end_date else None,
-            'attachments': [att.to_dict() for att in self.attachments]
+            'attachments': [att.to_dict() for att in self.attachments],
+            'key_result_id': self.key_result_id,
+            'priority': self.priority
         }
+        return json.loads(json.dumps(data, ensure_ascii=False))
 
 class Log(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -85,69 +92,82 @@ class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False, unique=True)
     description = db.Column(db.Text)
-    
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default='Active', server_default='Active')
     objectives = db.relationship('Objective', backref='project', cascade="all, delete-orphan")
+    builds = db.relationship('Build', backref='project', lazy=True, cascade="all, delete-orphan")
+    
+
+class Build(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    schedule_link = db.Column(db.String(500), nullable=True) 
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    
+    # SỬA LỖI: Bỏ lazy='dynamic' để cho phép tính toán tiến độ hiệu quả
+    objectives = db.relationship('Objective', backref='build', cascade="all, delete-orphan")
+
+    @property
+    def progress(self):
+        """Calculate the average progress of all objectives in this build."""
+        # Bây giờ self.objectives là một list (nếu được tải trước)
+        objectives_list = self.objectives
+        if not objectives_list:
+            return 0
+        
+        progress_values = [obj.progress for obj in objectives_list if obj.progress is not None]
+        if not progress_values:
+            return 0
+            
+        total_progress = sum(progress_values)
+        return round(total_progress / len(progress_values))
+
+    def __repr__(self):
+        return f'<Build {self.name}>'
 
 class Objective(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(500), nullable=False)
     start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=True)
     color = db.Column(db.String(20))
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'))
-    key_results = db.relationship('KeyResult', backref='objective', cascade="all, delete-orphan")
+    build_id = db.Column(db.Integer, db.ForeignKey('build.id'))
+    position = db.Column(db.Integer, default=0, nullable=False)
+    # SỬA LỖI: Bỏ lazy='dynamic' để cho phép tải trước dữ liệu
+    key_results = db.relationship('KeyResult', backref='objective', cascade="all, delete-orphan", order_by='KeyResult.id')
+
 
     @property
     def progress(self):
         krs = self.key_results
+        # Vì đã bỏ lazy='dynamic', krs giờ là một list
         if not krs: return 0
         return sum(kr.progress for kr in krs) / len(krs)
 
 class KeyResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(500), nullable=False)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
     current = db.Column(db.Float, default=0)
     target = db.Column(db.Float, default=1)
     objective_id = db.Column(db.Integer, db.ForeignKey('objective.id'), nullable=False)
-    action_items = db.relationship('ActionItem', backref='key_result', cascade="all, delete-orphan")
+    tasks = db.relationship('Task', backref='key_result', cascade="all, delete-orphan")
 
     @property
     def progress(self):
         if self.target == 0: return 0
         return min(100, (self.current / self.target) * 100)
 
-class ActionItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.String(500), nullable=False)
-    status = db.Column(db.String(50), default='To Do')
-    due_date = db.Column(db.Date)
-    report = db.Column(db.Text)
-    key_result_id = db.Column(db.Integer, db.ForeignKey('key_result.id'), nullable=False)
-    assignee_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    attachments = db.relationship('UploadedFile', backref='action_item', cascade="all, delete-orphan")
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'content': self.content,
-            'status': self.status,
-            'due_date': self.due_date.strftime('%Y-%m-%d') if self.due_date else None,
-            'assignee_name': self.assignee.username if self.assignee else None,
-            'assignee_id': self.assignee_id,
-            'kr_id': self.key_result_id,
-            'detail_url': url_for('main.action_detail', action_id=self.id)
-        }
-
-class Kaizen(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    week_start_date = db.Column(db.Date, nullable=False)
-    problem = db.Column(db.Text, nullable=False)
-    solution = db.Column(db.Text)
-
 # ==============================================================================
 # UPLOADS MANAGER
 # ==============================================================================
-
+# (Giữ nguyên không thay đổi)
 class UploadedFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     original_filename = db.Column(db.String(255), nullable=False)
@@ -158,9 +178,8 @@ class UploadedFile(db.Model):
     uploader_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=True)
-    action_item_id = db.Column(db.Integer, db.ForeignKey('action_item.id'), nullable=True)
     note_id = db.Column(db.Integer, db.ForeignKey('note.id'), nullable=True)
-    upload_source = db.Column(db.String(50), default='attachment') # attachment | direct
+    upload_source = db.Column(db.String(50), default='attachment')
     
     
     def to_dict(self):
@@ -171,29 +190,20 @@ class UploadedFile(db.Model):
             'delete_url': url_for('main.delete_uploaded_file', file_id=self.id)
         }
 
-# Trong file app/models.py, thay thế property context của class UploadedFile
-
     @property
     def upload_date_local(self):
         if not self.upload_date:
             return None
-        return self.upload_date + timedelta(hours=7)  # GMT+7
+        return self.upload_date + timedelta(hours=7)
     def context(self):
-        # Ưu tiên nguồn upload được đánh dấu tường minh
         if self.upload_source == 'direct':
             return {'text': 'Tải lên trực tiếp', 'url': None}
         
-        # Nếu không, xác định bối cảnh qua liên kết
         if self.task_id and self.task:
             task_date = self.task.task_date.strftime('%Y-%m-%d')
             return {
                 'text': 'Công việc',
                 'url': url_for('main.index', view_mode='day', date_str=task_date)
-            }
-        if self.action_item_id and self.action_item:
-            return {
-                'text': 'Hành động OKR',
-                'url': url_for('main.action_detail', action_id=self.action_item_id)
             }
         if self.note_id and self.note:
             return {
@@ -201,7 +211,6 @@ class UploadedFile(db.Model):
                 'url': url_for('main.notes')
             }
         
-        # Mặc định là đính kèm nếu không có nguồn rõ ràng
         return {
             'text': 'Đính kèm',
             'url': None
@@ -210,6 +219,7 @@ class UploadedFile(db.Model):
 # ==============================================================================
 # NOTE & COLUMN MODELS
 # ==============================================================================
+# (Giữ nguyên không thay đổi)
 class Column(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -241,29 +251,26 @@ class Note(db.Model):
             'timestamp': self.timestamp.strftime('%H:%M %d/%m/%Y'),
             'attachments': [att.to_dict() for att in self.attachments]
         }
-# Dán vào cuối file app/models.py
-# Dán vào cuối file app/models.py
 
-# Trong file app/models.py
+# ==============================================================================
+# PRACTICE LOG MODELS
+# ==============================================================================
+# (Giữ nguyên không thay đổi)
 class PracticeLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     log_ts = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    
-    # --- Dữ liệu từ Ghi nhận nhanh ---
     tag = db.Column(db.String(50), nullable=False, index=True)
     note = db.Column(db.Text)
-    
-    # --- Dữ liệu từ Quán chiếu sâu ---
     situation = db.Column(db.Text, nullable=True) 
-    sense_door = db.Column(db.String(50), nullable=True) # Căn: Mắt, Tai...
-    sense_object = db.Column(db.Text, nullable=True)  # **NEW**: Trần: Hình ảnh A, Âm thanh B...
-    feeling = db.Column(db.String(200), nullable=True)      # Thọ
-    craving = db.Column(db.String(200), nullable=True)     # Ái
+    sense_door = db.Column(db.String(50), nullable=True)
+    sense_object = db.Column(db.Text, nullable=True)
+    feeling = db.Column(db.String(200), nullable=True)
+    craving = db.Column(db.String(200), nullable=True)
     contemplation = db.Column(db.Text, nullable=True)
     outcome = db.Column(db.Text, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    intensity = db.Column(db.Integer, nullable=True)     # 1..5
-    duration_min = db.Column(db.Integer, nullable=True)  # phút
+    intensity = db.Column(db.Integer, nullable=True)
+    duration_min = db.Column(db.Integer, nullable=True)
     def to_dict(self):
         return {
             'id': self.id,
@@ -280,7 +287,6 @@ class PracticeLog(db.Model):
             'intensity': self.intensity,
             'duration_min': self.duration_min,
         }
-
 
 class HabitLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)

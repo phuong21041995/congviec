@@ -8,7 +8,7 @@
     .kanban-column { flex:1 1 0; min-width:10px; max-width:100%; background: #f6f7fb; border-radius:.75rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
     .kanban-column-header {
         display:flex; justify-content:space-between; align-items:center;
-        padding:.4rem 1rem; color:#fff; border-top-left-radius:.75rem; border-top-right-radius:.75rem;
+        padding:.7rem 1rem; color:#fff; border-top-left-radius:.75rem; border-top-right-radius:.75rem;
         background: linear-gradient(135deg, var(--col, #64748b) 0%, color-mix(in srgb, var(--col, #64748b) 70%, black) 100%);
         box-shadow: 0 8px 18px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.25);
         backdrop-filter: saturate(1.1) blur(4px);
@@ -240,39 +240,15 @@
 <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="{{ url_for('static', filename='vendor/sortablejs/Sortable.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
 
 <script>
     window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
     window.UPDATE_TASK_TIME_URL = "{{ url_for('main.update_task_time') }}";
     window.DELETE_TASK_URL_BASE = "{{ url_for('main.delete_task', task_id=0) }}".replace('/0', '/');
     window.CURRENT_USER_ID = "{{ current_user.id }}";
+    window.UPDATE_TASK_STATUS_URL = "{{ url_for('main.update_task_status') }}";
 
     document.addEventListener('DOMContentLoaded', function() {
-        // --- LOGIC CHO CÁC BỘ LỌC ---
-        const userFilter = document.getElementById('user-filter');
-        if (userFilter) {
-            userFilter.addEventListener('change', function() {
-                const url = new URL(window.location.href);
-                url.searchParams.set('user_id', this.value);
-                window.location.href = url.toString();
-            });
-        }
-        
-        const overdueSwitch = document.getElementById('overdue-filter-switch');
-        if (overdueSwitch) {
-            overdueSwitch.addEventListener('change', function() {
-                const url = new URL(window.location.href);
-                if (this.checked) {
-                    url.searchParams.set('overdue', '1');
-                } else {
-                    url.searchParams.delete('overdue');
-                }
-                window.location.href = url.toString();
-            });
-        }
-		// --- KHỞI TẠO BIỂU ĐỒ
-
         const statusMeta = {{ status_meta | tojson | safe }};
         const statusColors = Object.fromEntries(
             Object.entries(statusMeta).map(([status, meta]) => [status, meta.color])
@@ -280,7 +256,6 @@
 
         const statusOrder = ['Pending', 'In Progress', 'Review', 'Done', 'Drop'];
 
-        // 1. Biểu đồ cột chồng (Summary)
         {% if summary_data %}
         const summaryCtx = document.getElementById('summaryChartCanvas');
         const summaryData = {{ summary_data | tojson | safe }};
@@ -304,7 +279,6 @@
         }
         {% endif %}
 
-        // 2. Biểu đồ tròn (Overall Status)
         {% if overall_status_counts %}
         const donutCtx = document.getElementById('statusDonutChart');
         const donutData = {{ overall_status_counts | tojson | safe }};
@@ -340,65 +314,44 @@
             });
         }
         {% endif %}
-        
-        // [THAY ĐỔI] - Kích hoạt nút "Thêm công việc" duy nhất ở cột Pending
-        const addTaskBtn = document.getElementById('add-task-btn');
-        if (addTaskBtn && typeof window.openCreateModal === 'function') {
-            addTaskBtn.addEventListener('click', function() {
-                const today = new Date().toISOString().split('T')[0];
-                // Mở modal và gán cứng trạng thái là 'Pending'
-                window.openCreateModal({ date: today, hour: '', status: 'Pending' });
-            });
-        }
 
-        // --- LOGIC CHO KÉO THẢ (SORTABLEJS) ---
-        const updateUrl = document.querySelector('.kanban-board-container').dataset.updateUrl;
-        document.querySelectorAll('.kanban-cards-container').forEach(column => {
-            new Sortable(column, {
-                group: 'kanban-tasks',
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                onEnd: function(evt) {
-                    const taskId = evt.item.dataset.taskId;
-                    const newStatus = evt.to.dataset.status;
-                    fetch(updateUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ taskId, newStatus })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (!data.success) {
-                            console.error("Failed to update task status.");
-                            evt.from.appendChild(evt.item); // Revert on failure
-                        }
-                    });
-                }
-            });
-        });
-        // --- 5. LOGIC LƯU TRẠNG THÁI BIỂU ĐỒ (THÊM VÀO ĐÂY) ---
-        const chartCollapseElement = document.getElementById('chartCollapseArea');
-        if (chartCollapseElement) {
-            const bsCollapse = new bootstrap.Collapse(chartCollapseElement, {
-                toggle: false // Ngăn không cho nó tự động bật/tắt
-            });
-
-            // Khi tải trang, kiểm tra localStorage và hiển thị chart nếu cần
-            if (localStorage.getItem('isChartVisible') === 'true') {
-                bsCollapse.show();
+        const kanbanBoardContainer = document.querySelector('.kanban-board-container');
+        if (kanbanBoardContainer) {
+            const addTaskBtn = document.getElementById('add-task-btn');
+            if (addTaskBtn) {
+                addTaskBtn.addEventListener('click', function() {
+                    const today = new Date().toISOString().split('T')[0];
+                    window.openCreateModal({ date: today, status: 'Pending' });
+                });
             }
 
-            // Khi chart được BẬT, lưu trạng thái vào localStorage
-            chartCollapseElement.addEventListener('shown.bs.collapse', function () {
-                localStorage.setItem('isChartVisible', 'true');
-            });
+            kanbanBoardContainer.querySelectorAll('.kanban-cards-container').forEach(column => {
+                new Sortable(column, {
+                    group: 'kanban-tasks',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function(evt) {
+                        const taskId = evt.item.dataset.taskId;
+                        const newStatus = evt.to.dataset.status;
+                        const updateUrl = window.UPDATE_TASK_STATUS_URL;
 
-            // Khi chart bị TẮT, xóa trạng thái khỏi localStorage
-            chartCollapseElement.addEventListener('hidden.bs.collapse', function () {
-                localStorage.setItem('isChartVisible', 'false');
+                        fetch(updateUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ taskId, newStatus })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.success) {
+                                console.error("Failed to update task status.");
+                                evt.from.appendChild(evt.item);
+                            }
+                        });
+                    }
+                });
             });
         }
     });
-	
 </script>
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
 {% endblock %}

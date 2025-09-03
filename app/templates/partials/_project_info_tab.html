@@ -1,0 +1,120 @@
+{% set p = p_data.project %}
+{% set stats = p_data.stats %}
+{% set days_remaining = p_data.days_remaining %}
+
+<!-- Row 1: Key Metric Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Overall Progress</h6>
+                <div class="d-flex align-items-center">
+                    <div class="fs-2 fw-bold me-2">{{ stats.progress|round }}%</div>
+                    <div class="progress flex-grow-1" style="height: 10px;">
+                        <div class="progress-bar" role="progressbar" style="width: {{ stats.progress }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Deadline</h6>
+                {% if p.end_date %}
+                <div class="fs-2 fw-bold">
+                    {% if days_remaining is not none and days_remaining < 0 %}
+                    <span class="text-danger">{{ days_remaining|abs }} days ago</span>
+                    {% elif days_remaining is not none %}
+                    <span class="text-success">{{ days_remaining }} days left</span>
+                    {% else %}
+                    --
+                    {% endif %}
+                </div>
+                <small class="text-muted">Ends on {{ p.end_date.strftime('%b %d, %Y') }}</small>
+                {% else %}
+                <div class="fs-2 fw-bold text-muted">Not set</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Tasks</h6>
+                <div class="fs-2 fw-bold">{{ stats.open_tasks }} <span class="fs-5 text-muted">/ {{ stats.task }} open</span></div>
+                <small class="text-muted">{{ stats.task - stats.open_tasks }} tasks completed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Status</h6>
+                <div class="fs-4 fw-bold mt-2">
+                    <span class="badge fs-6 rounded-pill status-badge-{{ p.status|lower|replace(' ', '-') }}">{{ p.status }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Column 1: Builds & Description -->
+    <div class="col-lg-7">
+        <h5 class="mb-3">Builds</h5>
+        <div class="d-flex flex-column gap-3">
+            {% for build in p.builds %}
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-title mb-1">{{ build.name }}</h6>
+                            {% if build.start_date and build.end_date %}
+                            <small class="text-muted">{{ build.start_date.strftime('%b %d') }} - {{ build.end_date.strftime('%b %d, %Y') }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="btn-group">
+                            {% if build.schedule_link %}
+                                <a href="{{ build.schedule_link }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Schedule"><i class="fa-solid fa-calendar-week"></i></a>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-secondary btn-edit-build" data-build-id="{{ build.id }}"><i class="fa-solid fa-pen"></i></button>
+                        </div>
+                    </div>
+					<div class="d-flex align-items-center mt-2">
+						<div class="progress flex-grow-1 me-2" style="height: 8px;">
+							<div class="progress-bar" role="progressbar" 
+								 style="width: {{ build.progress }}%;" 
+								 aria-valuenow="{{ build.progress }}" 
+								 aria-valuemin="0" aria-valuemax="100">
+							</div>
+						</div>
+						<small class="fw-bold text-muted">{{ build.progress }}%</small>
+					</div>
+					</div>
+			</div>                
+            {% else %}
+            <div class="card card-body text-center text-muted">No builds for this project.</div>
+            {% endfor %}
+        </div>
+        <h5 class="mt-4 mb-3">Description</h5>
+        <p class="text-muted small">{{ p.description or 'No description provided.' }}</p>
+    </div>
+    <!-- Column 2: Recent Activity -->
+    <div class="col-lg-5">
+        <h5 class="mb-3">Recent Activity</h5>
+        <ul class="list-group list-group-flush">
+            {% for log in p_data.logs %}
+            <li class="list-group-item px-0">
+                <small class="text-muted">{{ log.timestamp|to_local_time }}</small>
+                <p class="mb-0 small">
+                    {% if log.user %}<strong class="text-primary">{{ log.user.username }}</strong> {% endif %}
+                    {{ log.action }}
+                </p>
+            </li>
+            {% else %}
+            <li class="list-group-item px-0 text-muted small">No recent activity for this project.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>

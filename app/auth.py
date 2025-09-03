@@ -1,13 +1,11 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 import click
-from jinja2 import TemplateNotFound  # <-- thêm để bắt lỗi template
+from jinja2 import TemplateNotFound
 from app import db, bcrypt, login_manager
-from app.models import User, Task, ActionItem, Objective, UploadedFile, Log
+from app.models import User, Task, Objective, UploadedFile, Log
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
-
-# GHI CHÚ: @login_manager.user_loader đã chuyển sang app/__init__.py
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -25,7 +23,6 @@ def login():
         else:
             flash('Đăng nhập thất bại. Vui lòng kiểm tra lại tên đăng nhập hoặc mật khẩu.', 'danger')
 
-    # Thử render theo 2 vị trí: 'auth/login.html' rồi fallback 'login.html'
     try:
         return render_template('auth/login.html')
     except TemplateNotFound:
@@ -36,10 +33,6 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('auth.login'))
-
-# ==============================================================================
-# LỆNH COMMAND LINE (CLI)
-# ==============================================================================
 
 @bp.cli.command('create-user')
 @click.argument('username')
@@ -83,7 +76,6 @@ def delete_user_command(username):
 
     try:
         Task.query.filter_by(who_id=user.id).update({'who_id': None})
-        ActionItem.query.filter_by(assignee_id=user.id).update({'assignee_id': None})
         Objective.query.filter_by(owner_id=user.id).update({'owner_id': None})
         UploadedFile.query.filter_by(uploader_id=user.id).update({'uploader_id': None})
         Log.query.filter_by(user_id=user.id).update({'user_id': None})

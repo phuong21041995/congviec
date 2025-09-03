@@ -2,232 +2,222 @@
 {% block title %}Report{% endblock %}
 
 {% block content %}
+
 <header class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="m-0"><i class="fa-solid fa-chart-line me-2"></i>Report</h2>
-    
-    <!-- === NÚT EXPORT ĐƯỢC NÂNG CẤP THÀNH DROPDOWN === -->
-    <div class="btn-group">
-        <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fa-solid fa-download me-2"></i>Export Data
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li>
-                <h6 class="dropdown-header">Calendar</h6>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='tasks', format='xlsx', user_filter=filters.user, time_filter=filters.time) }}">
-                    <i class="fa-solid fa-file-excel me-2 text-success"></i>Excel Export (.xlsx)
-                </a>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='tasks', format='ics', user_filter=filters.user, time_filter=filters.time) }}">
-                    <i class="fa-solid fa-calendar-days me-2 text-primary"></i>Calendar export (.ics)
-                </a>
-            </li>
-            <li><hr class="dropdown-divider"></li>
-            <li>
-                <h6 class="dropdown-header">OKR</h6>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='okrs', format='xlsx', user_filter=filters.user, project_filter=filters.project, time_filter=filters.time) }}">
-                    <i class="fa-solid fa-file-excel me-2 text-success"></i>Action item export to Excel
-                </a>
-            </li>
-            <li><hr class="dropdown-divider"></li>
-             <li>
-                <h6 class="dropdown-header">Other</h6>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='files', format='xlsx') }}">
-                    <i class="fa-solid fa-folder me-2 text-warning"></i>Export to Excel
-                </a>
-            </li>
-        </ul>
-    </div>
+<h2 class="m-0"><i class="fa-solid fa-chart-line me-2"></i>Report</h2>
+
+<!-- === NÚT EXPORT ĐƯỢC NÂNG CẤP THÀNH DROPDOWN === -->
+<div class="btn-group">
+    <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fa-solid fa-download me-2"></i>Export Data
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+            <h6 class="dropdown-header">Calendar</h6>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='tasks', format='xlsx', user_filter=filters.user, time_filter=filters.time) }}">
+                <i class="fa-solid fa-file-excel me-2 text-success"></i>Excel Export (.xlsx)
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='tasks', format='ics', user_filter=filters.user, time_filter=filters.time) }}">
+                <i class="fa-solid fa-calendar-days me-2 text-primary"></i>Calendar export (.ics)
+            </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+            <h6 class="dropdown-header">OKR</h6>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='okrs', format='xlsx', user_filter=filters.user, project_filter=filters.project, time_filter=filters.time) }}">
+                <i class="fa-solid fa-file-excel me-2 text-success"></i>Task export to Excel
+            </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+         <li>
+            <h6 class="dropdown-header">Other</h6>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{{ url_for('main.export_data', data_type='files', format='xlsx') }}">
+                <i class="fa-solid fa-folder me-2 text-warning"></i>Export to Excel
+            </a>
+        </li>
+    </ul>
+</div>
+
 </header>
 
 <div class="card shadow-sm">
-    <div class="card-header">
-        <h5 class="m-0">Report filter</h5>
-    </div>
-    <div class="card-body">
-        <form method="GET" action="{{ url_for('main.reports_page') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label for="user_filter" class="form-label">Filter member</label>
-                    <select id="user_filter" name="user_filter" class="form-select">
-                        <option value="all" {% if filters.user == 'all' %}selected{% endif %}>All member</option>
-                        {% for user in users %}
-                        <option value="{{ user.id }}" {% if filters.user == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+<div class="card-header">
+<h5 class="m-0">Report filter</h5>
+</div>
+<div class="card-body">
+<form method="GET" action="{{ url_for('main.reports_page') }}">
+<div class="row g-3 align-items-end">
+<div class="col-md-3">
+<label for="user_filter" class="form-label">Filter member</label>
+<select id="user_filter" name="user_filter" class="form-select">
+<option value="all" {% if filters.user == 'all' %}selected{% endif %}>All member</option>
+{% for user in users %}
+<option value="{{ user.id }}" {% if filters.user == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="col-md-3">
+<label for="project_filter" class="form-label">Filter by project</label>
+<select id="project_filter" name="project_filter" class="form-select">
+<option value="all" {% if filters.project == 'all' %}selected{% endif %}>All project</option>
+{% for project in projects %}
+<option value="{{ project.id }}" {% if filters.project == project.id|string %}selected{% endif %}>{{ project.name }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="col-md-3">
+<label for="time_filter" class="form-label">Period</label>
+<select id="time_filter" name="time_filter" class="form-select">
+<option value="this_week" {% if filters.time == 'this_week' %}selected{% endif %}>This week</option>
+<option value="this_month" {% if filters.time == 'this_month' %}selected{% endif %}>This month</option>
+<option value="last_7_days" {% if filters.time == 'last_7_days' %}selected{% endif %}>Lastest 7 days</option>
+<option value="last_30_days" {% if filters.time == 'last_30_days' %}selected{% endif %}>Lastest 30 days</option>
+<option value="last_30_days" {% if filters.time == 'last_30_days' %}selected{% endif %}>Lastest 30 days</option>
+</select>
+</div>
+<div class="col-md-3">
+<button type="submit" class="btn btn-primary w-100">View report</button>
+</div>
+</div>
+</form>
+</div>
+</div>
+
+{% if report_data %}
+
+<div class="row mt-4">
+<!-- Biểu đồ thống kê -->
+<div class="col-lg-12">
+<div class="card shadow-sm mb-4">
+<div class="card-header">
+<h5 class="m-0">Finish job (%)</h5>
+</div>
+<div class="card-body">
+<canvas id="completionChart"></canvas>
+</div>
+</div>
+</div>
+
+<!-- Bảng dữ liệu chi tiết -->
+<div class="col-lg-12">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="m-0">Statistic detail</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Member</th>
+                            <th class="text-center">Tasks (Done / Total)</th>
+                            <th class="text-center">Rate (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in report_data %}
+                        <tr>
+                            <td class="ps-3"><strong>{{ data.user.username }}</strong></td>
+                            <td class="text-center">{{ data.tasks_done }} / {{ data.tasks_total }}</td>
+                            <td class="text-center">
+                                <div class="progress" style="height: 20px;" title="{{ "%.1f"|format(data.task_completion_rate) }}%">
+                                    <div class="progress-bar" role="progressbar" style="width: {{ data.task_completion_rate }}%;" aria-valuenow="{{ data.task_completion_rate }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ "%.0f"|format(data.task_completion_rate) }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
                         {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="project_filter" class="form-label">Filter by project</label>
-                    <select id="project_filter" name="project_filter" class="form-select">
-                        <option value="all" {% if filters.project == 'all' %}selected{% endif %}>All project</option>
-                        {% for project in projects %}
-                        <option value="{{ project.id }}" {% if filters.project == project.id|string %}selected{% endif %}>{{ project.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="time_filter" class="form-label">Period</label>
-                    <select id="time_filter" name="time_filter" class="form-select">
-                        <option value="this_week" {% if filters.time == 'this_week' %}selected{% endif %}>This week</option>
-                        <option value="this_month" {% if filters.time == 'this_month' %}selected{% endif %}>This month</option>
-                        <option value="last_7_days" {% if filters.time == 'last_7_days' %}selected{% endif %}>Lastest 7 days</option>
-                        <option value="last_30_days" {% if filters.time == 'last_30_days' %}selected{% endif %}>Lastest 30 days</option>
-                        <option value="last_30_days" {% if filters.time == 'last_30_days' %}selected{% endif %}>Lastest 30 days</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">View report</button>
-                </div>
+                    </tbody>
+                </table>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
-
-{% if report_data %}
-<div class="row mt-4">
-    <!-- Biểu đồ thống kê -->
-    <div class="col-lg-12">
-        <div class="card shadow-sm mb-4">
-            <div class="card-header">
-                <h5 class="m-0">Finish job (%)</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="completionChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bảng dữ liệu chi tiết -->
-    <div class="col-lg-12">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="m-0">Statistic detail</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Member</th>
-                                <th class="text-center">Action Items (Done / Total)</th>
-                                <th class="text-center">Rate (OKR)</th>
-                                <th class="text-center">Job (Done / Total)</th>
-                                <th class="text-center">Rate (Common)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for data in report_data %}
-                            <tr>
-                                <td class="ps-3"><strong>{{ data.user.username }}</strong></td>
-                                <td class="text-center">{{ data.actions_done }} / {{ data.actions_total }}</td>
-                                <td class="text-center">
-                                    <div class="progress" style="height: 20px;" title="{{ "%.1f"|format(data.action_completion_rate) }}%">
-                                        <div class="progress-bar" role="progressbar" style="width: {{ data.action_completion_rate }}%;" aria-valuenow="{{ data.action_completion_rate }}" aria-valuemin="0" aria-valuemax="100">
-                                            {{ "%.0f"|format(data.action_completion_rate) }}%
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="text-center">{{ data.tasks_done }} / {{ data.tasks_total }}</td>
-                                <td class="text-center">
-                                    <div class="progress" style="height: 20px;" title="{{ "%.1f"|format(data.task_completion_rate) }}%">
-                                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ data.task_completion_rate }}%;" aria-valuenow="{{ data.task_completion_rate }}" aria-valuemin="0" aria-valuemax="100">
-                                            {{ "%.0f"|format(data.task_completion_rate) }}%
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 {% else %}
 <div class="alert alert-info mt-4 text-center">
-    <p class="h5">No data to report!</p>
-    <p>Try to use other filter condition</p>
+<p class="h5">No data to report!</p>
+<p>Try to use other filter condition</p>
 </div>
 {% endif %}
 
 {% endblock %}
 
 {% block scripts %}
+
 <!-- Thêm thư viện Chart.js -->
+
 <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('completionChart');
-    if (ctx) {
-        // Dữ liệu được truyền từ backend
-        const labels = {{ chart_labels|tojson }};
-        const actionData = {{ chart_data_actions|tojson }};
-        const taskData = {{ chart_data_tasks|tojson }};
+const ctx = document.getElementById('completionChart');
+if (ctx) {
+// Dữ liệu được truyền từ backend
+const labels = {{ chart_labels|tojson }};
+const taskData = {{ chart_data_tasks|tojson }};
 
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Action item rate (OKR %)',
-                        data: actionData,
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Daily job rate (Calendar %)',
-                        data: taskData,
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%'
-                            }
+    new Chart(ctx, {
+        type: &#39;bar&#39;,
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: &#39;Task rate (%)&#39;,
+                    data: taskData,
+                    backgroundColor: &#39;rgba(54, 162, 235, 0.6)&#39;,
+                    borderColor: &#39;rgba(54, 162, 235, 1)&#39;,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + &#39;%&#39;
                         }
                     }
+                }
+            },
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: &#39;top&#39;,
                 },
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toFixed(1) + '%';
-                                }
-                                return label;
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || &#39;&#39;;
+                            if (label) {
+                                label += &#39;: &#39; ;
                             }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toFixed(1) + &#39;%&#39;;
+                            }
+                            return label;
                         }
                     }
                 }
             }
-        });
-    }
+        }
+    });
+}
+
 });
 </script>
+
 {% endblock %}

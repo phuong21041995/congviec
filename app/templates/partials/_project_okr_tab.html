@@ -1,0 +1,77 @@
+<div id="okr-tab-content">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <h4 class="m-0">Objectives & Key Results</h4>
+            <button id="addNewObjectiveBtn" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i> New Objective</button>
+        </div>
+		<div id="okrFilterControls" class="btn-group btn-group-sm">
+			<button class="btn btn-outline-secondary active" data-status="all">All</button>
+			<button class="btn btn-outline-secondary" data-status="done">Done</button>
+			<button class="btn btn-outline-secondary" data-status="processing">Processing</button>
+			<button class="btn btn-outline-secondary" data-status="pending">Pending</button>
+		</div>
+    </div>
+
+    <div id="objective-list-container">
+        {% for obj in objectives %}
+        <div class="objective-block" data-obj-id="{{ obj.id }}">
+            <div class="objective-header" data-bs-toggle="collapse" data-bs-target="#kr-container-{{ obj.id }}" aria-expanded="true" style="--obj-color: {{ obj.color | default('#0d6efd') }};">
+                <div class="d-flex align-items-center flex-grow-1 min-width-0">
+                    <i class="fa-solid fa-crosshairs me-2"></i>
+                    <span class="text-truncate"><strong>O{{ loop.index }}: {{ obj.content }}</strong></span>
+                    {% if obj.owner %}<span class="badge bg-light text-dark ms-2">{{ obj.owner.username }}</span>{% endif %}
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="progress me-3" style="width: 100px; height: 10px; background-color: rgba(0,0,0,0.2);">
+                        <div id="obj-progress-bar-{{ obj.id }}" class="progress-bar bg-light" role="progressbar" style="width: {{ obj.progress }}%;"></div>
+                    </div>
+                    <span id="obj-progress-text-{{ obj.id }}" class="badge bg-light text-dark rounded-pill me-3">{{ obj.progress | round }}%</span>
+                    
+                    <button class="btn btn-sm btn-outline-light me-2 add-kr-btn" data-obj-id="{{ obj.id }}" title="Add Key Result"><i class="fa-solid fa-plus"></i></button>
+                    <button class="btn btn-sm btn-outline-light me-2 edit-obj-btn" data-obj-id="{{ obj.id }}" title="Edit Objective"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-outline-light delete-btn" data-type="objective" data-id="{{ obj.id }}" title="Delete Objective"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            </div>
+            <div class="kr-container collapse show" id="kr-container-{{ obj.id }}">
+                {% for kr in obj.key_results %}
+                <div class="kr-block" data-kr-id="{{ kr.id }}">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div><i class="fa-solid fa-flag me-2 text-success"></i><span><strong>KR{{ loop.index }}: {{ kr.content }}</strong></span></div>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-secondary me-2" id="kr-progress-text-{{kr.id}}">{{ kr.current|round }}/{{ kr.target|round }}</span>
+                            <button class="btn btn-sm btn-outline-primary me-2 add-task-btn" data-kr-id="{{ kr.id }}" title="Add Task"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary me-2 edit-kr-btn" data-kr-id="{{ kr.id }}" title="Edit Key Result"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary delete-btn" data-type="key_result" data-id="{{ kr.id }}" title="Delete Key Result"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    </div>
+                    <div class="progress mt-1" style="height: 5px;">
+                        <div id="kr-progress-bar-{{kr.id}}" class="progress-bar" role="progressbar" style="width: {{ kr.progress }}%;"></div>
+                    </div>
+                    <div class="tasks-container mt-2">
+                        {% for task in kr.tasks %}
+                        <div class="action-item" data-task-id="{{ task.id }}">
+                            <div class="d-flex align-items-center flex-grow-1 min-width-0">
+                                <input type="checkbox" class="form-check-input me-3 task-checkbox" data-id="{{ task.id }}" {% if task.status == 'Done' %}checked{% endif %}>
+                                <div class="action-text text-truncate {% if task.status == 'Done' %}done{% endif %}">
+                                <span class="fw-bold me-1">Act{{ loop.index }}:</span> {{ task.what }}
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center flex-shrink-0">
+                                {% if task.assignee %}<span class="badge bg-info-subtle text-info-emphasis me-2">{{ task.assignee.username }}</span>{% endif %}
+                                <button class="btn btn-sm btn-outline-secondary open-task-modal-btn me-2" title="Edit Task"><i class="fa-solid fa-file-pen"></i></button>							
+                                <button class="btn btn-sm btn-outline-secondary delete-btn" data-type="task" data-id="{{ task.id }}" title="Delete Task"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not objectives %}
+    <div class="alert alert-info">Chưa có OKR nào cho dự án này. Hãy nhấn "New Objective" để bắt đầu.</div>
+    {% endif %}
+</div>
