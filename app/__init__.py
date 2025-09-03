@@ -146,31 +146,7 @@ def create_app(config_class=Config):
         except Exception:
             return None
 
-    # === NGĂN SEED khi đang chạy `flask db ...` hoặc khi set env SKIP_SEED=1 ===
-    is_flask_db_cmd = len(sys.argv) > 1 and sys.argv[1] == "db"
-    skip_seed_env   = os.environ.get("SKIP_SEED") == "1"
-
-    if not is_flask_db_cmd and not skip_seed_env:
-        with app.app_context():
-            has_user = db.session.execute(select(User.id)).first()
-            if not has_user:
-                app.logger.info("Không có user nào. Đang tạo user mặc định...")
-                user = User(username="admin", email="admin@example.com")
-                try:
-                    # Cố gắng dùng scrypt (werkzeug default)
-                    user.set_password("adidaphat")
-                    db.session.add(user)
-                    db.session.commit()
-                except (DataError, StatementError):
-                    # Nếu crash do password_hash còn 128 → rollback & fallback pbkdf2
-                    db.session.rollback()
-                    # fallback trực tiếp, KHÔNG phụ thuộc method trong model
-                    user.password_hash = generate_password_hash("adidaphat", method="pbkdf2:sha256")
-                    db.session.add(user)
-                    db.session.commit()
-                app.logger.info("✅ Đã tạo user mặc định: admin / adidaphat")
-            else:
-                app.logger.info("✅ Đã có user trong database. Bỏ qua tạo mặc định.")
+ 
 
     # --- Jinja filters tiện ích ---
     def format_date_short(date_string):
