@@ -1,82 +1,83 @@
 {% extends "base.html" %}
-{% block title %}Result search for '{{ query }}'{% endblock %}
+{% block title %}Kết quả tìm kiếm cho '{{ query }}'{% endblock %}
 
 {% block content %}
-
 <header class="d-flex justify-content-between align-items-center mb-4">
-<h2 class="m-0">
-<i class="fa-solid fa-search me-2"></i>
-Result search for: <span class="text-primary">"{{ query }}"</span>
-</h2>
+    <h2 class="m-0">
+        <i class="fa-solid fa-search me-2"></i>
+        Kết quả cho: <span class="text-primary">"{{ query }}"</span>
+    </h2>
 </header>
 
-{% if not tasks and not objectives and not key_results %}
+{% set has_results = results.tasks or results.objectives or results.key_results or results.projects or results.notes or results.files %}
+
+{% if not has_results %}
 <div class="alert alert-warning text-center">
-<h4>Nothing to show</h4>
-<p class="mb-0">Try to use other key.</p>
+    <h4>Không tìm thấy kết quả nào</h4>
+    <p class="mb-0">Vui lòng thử với một từ khóa khác.</p>
 </div>
 {% else %}
-{% if tasks %}
-<div class="card shadow-sm mb-4">
-<div class="card-header">
-<h5 class="m-0">Event ({{ tasks|length }})</h5>
-</div>
-<ul class="list-group list-group-flush">
-{% for task in tasks %}
-<li class="list-group-item">
-<a href="{{ url_for('main.task_detail', task_id=task.id) }}" class="text-decoration-none">
-<strong>{{ task.what | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
-</a>
-<small class="text-muted d-block">
-At {{ task.hour or 'all day' }}h, day {{ task.task_date.strftime('%d/%m/%Y') }}
-</small>
-{% if query.lower() in (task.note or '').lower() %}
-<p class="mt-2 mb-0 p-2 bg-light border rounded small text-muted">
-<i class="fa-solid fa-quote-left fa-xs me-1"></i>
-...{{ task.note | truncate(150) | replace(query, '<mark>' + query + '</mark>') | safe }}...
-</p>
-{% endif %}
-</li>
-{% endfor %}
-</ul>
-</div>
-{% endif %}
+    {% if results.projects %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">Dự án ({{ results.projects|length }})</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for p in results.projects %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.project_workspace', project_id=p.id) }}" class="text-decoration-none">
+                    <strong>{{ p.name | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
-{% if objectives %}
-<div class="card shadow-sm mb-4">
-    <div class="card-header"><h5 class="m-0">OKR ({{ objectives|length }})</h5></div>
-    <ul class="list-group list-group-flush">
-        {% for obj in objectives %}
-        <li class="list-group-item">
-            <a href="{{ url_for('main.okr_page', date_str=obj.start_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
-                <strong>{{ obj.content | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
-            </a>
-            <small class="text-muted d-block">From {{ obj.start_date.strftime('%d/%m/%Y') }}</small>
-        </li>
-        {% endfor %}
-    </ul>
-</div>
+    {% if results.tasks %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">Công việc ({{ results.tasks|length }})</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for task in results.tasks %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.index', view_mode='day', date_str=task.task_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+                    <strong>{{ task.what | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+                <small class="text-muted d-block">Vào ngày {{ task.task_date.strftime('%d/%m/%Y') }}</small>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if results.notes %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">Ghi chú ({{ results.notes|length }})</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for note in results.notes %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.notes') }}" class="text-decoration-none">
+                    <strong>{{ note.title | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if results.files %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="m-0">Files ({{ results.files|length }})</h5></div>
+        <ul class="list-group list-group-flush">
+            {% for file in results.files %}
+            <li class="list-group-item">
+                <a href="{{ url_for('main.uploaded_file', filename=file.saved_filename) }}" target="_blank" class="text-decoration-none">
+                    <i class="fa-solid fa-download me-2"></i>
+                    <strong>{{ file.original_filename | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
 {% endif %}
-
-{% if key_results %}
-<div class="card shadow-sm mb-4">
-    <div class="card-header"><h5 class="m-0">Key Results ({{ key_results|length }})</h5></div>
-    <ul class="list-group list-group-flush">
-        {% for kr in key_results %}
-        <li class="list-group-item">
-            <a href="{{ url_for('main.okr_page', date_str=kr.objective.start_date.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
-                <strong>{{ kr.content | replace(query, '<mark>' + query + '</mark>') | safe }}</strong>
-            </a>
-            <small class="text-muted d-block">Belong OKR: {{ kr.objective.content }}</small>
-        </li>
-        {% endfor %}
-    </ul>
-</div>
-{% endif %}
-
-{% endif %}
-
-{% endblock %}
-
-{% block scripts %}
 {% endblock %}

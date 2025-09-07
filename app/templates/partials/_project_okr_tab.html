@@ -37,6 +37,7 @@
                 <div class="kr-block" data-kr-id="{{ kr.id }}">
                     <div class="d-flex align-items-center justify-content-between">
                         <div><i class="fa-solid fa-flag me-2 text-success"></i><span><strong>KR{{ loop.index }}: {{ kr.content }}</strong></span></div>
+						
                         <div class="d-flex align-items-center">
                             <span class="badge bg-secondary me-2" id="kr-progress-text-{{kr.id}}">{{ kr.current|round }}/{{ kr.target|round }}</span>
                             <button class="btn btn-sm btn-outline-primary me-2 add-task-btn" data-kr-id="{{ kr.id }}" title="Add Task"><i class="fa-solid fa-plus"></i></button>

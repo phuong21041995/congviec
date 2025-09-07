@@ -31,9 +31,13 @@ def recalculate_kr_progress(kr_id):
         if action_items_list:
             total_actions = len(action_items_list)
             done_actions = sum(1 for action in action_items_list if action.status == 'Done')
+            
+            # SỬA LỖI TÍNH TOÁN TẠI ĐÂY
             kr.current = float(done_actions)
-            kr.target = float(total_actions) if total_actions > 0 else 1.0
+            kr.target = float(total_actions) # Đảm bảo target là TỔNG SỐ công việc
+
         else:
+            # Nếu không có action nào, trả về 0
             kr.current = 0
             kr.target = 0
         db.session.commit()
@@ -263,22 +267,17 @@ def index(view_mode='week', date_str=None):
 @login_required
 def save_task():
     data = request.form
-    # SỬA LỖI 1: Lấy đúng key 'taskId' từ form, không phải 'id'
-    task_id = data.get('taskId') 
-    
+    task_id = data.get('taskId')
     what = bleach.clean(data.get('taskWhat', ''))
     task_date_str = data.get('taskDate')
-    
     if not what or not task_date_str:
         return jsonify({'success': False, 'message': 'Task title and date are required.'}), 400
-
     try:
         hour_str = data.get('taskHour')
         who_id_str = data.get('taskWho')
         key_result_id_str = data.get('taskKeyResult')
         end_date_str = data.get('taskRecurrenceEndDate')
         recurrence = data.get('taskRecurrence', 'none')
-
         task_date = datetime.strptime(task_date_str, '%Y-%m-%d').date()
         hour = int(hour_str) if hour_str else None
         who_id = int(who_id_str) if who_id_str else None
@@ -287,7 +286,6 @@ def save_task():
     except (ValueError, TypeError) as e:
         current_app.logger.error(f"Error parsing form data for task save: {e}")
         return jsonify({'success': False, 'message': 'Invalid data format submitted.'}), 400
-
     if task_id:
         task = Task.query.get_or_404(task_id)
         log_content = f"Updated task ID {task.id}"
@@ -295,7 +293,6 @@ def save_task():
         task = Task()
         db.session.add(task)
         log_content = "Created new task"
-
     task.what = what
     task.task_date = task_date
     task.hour = hour
@@ -306,11 +303,7 @@ def save_task():
     task.key_result_id = key_result_id
     task.recurrence = recurrence
     task.recurrence_end_date = recurrence_end_date
-    
-    # Commit để lưu thông tin chính và lấy task.id nếu là task mới
     db.session.commit()
-    
-    # SỬA LỖI 2: Thêm logic xử lý file upload
     try:
         files = request.files.getlist('attachments[]')
         for file in files:
@@ -319,11 +312,9 @@ def save_task():
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 saved_filename = f"{timestamp}_{original_filename}"
                 file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], saved_filename)
-                
                 file.save(file_path)
                 file_size = os.path.getsize(file_path)
                 _, file_ext = os.path.splitext(original_filename)
-
                 new_file = UploadedFile(
                     original_filename=original_filename,
                     saved_filename=saved_filename,
@@ -331,19 +322,14 @@ def save_task():
                     file_size=file_size,
                     uploader_id=current_user.id,
                     upload_source='attachment',
-                    task_id=task.id  # Gắn file vào task vừa lưu
+                    task_id=task.id
                 )
                 db.session.add(new_file)
     except Exception as e:
         current_app.logger.error(f"Error handling file upload for task {task.id}: {e}")
-        # Không cần rollback vì thông tin task chính đã lưu thành công
-        pass # Bỏ qua nếu có lỗi upload file
-    
-    # Xử lý các logic phụ và log
+        pass
     db.session.add(Log(action=f"{log_content}: '{what}'", user_id=current_user.id))
-    
     if not task_id and recurrence != 'none' and recurrence_end_date:
-        # (Giữ nguyên logic tạo task lặp lại của bạn)
         current_date, original_day = task.task_date, task.task_date.day
         while True:
             if recurrence == 'daily': current_date += timedelta(days=1)
@@ -353,11 +339,9 @@ def save_task():
                 if next_month > 12: next_month, next_year = 1, next_year + 1
                 last_day = monthrange(next_year, next_month)[1]
                 current_date = date(next_year, next_month, min(original_day, last_day))
-
             if current_date > recurrence_end_date: break
             if not Task.query.filter_by(task_date=current_date, hour=task.hour, what=task.what).first():
                 db.session.add(Task(task_date=current_date, hour=task.hour, what=task.what, who_id=task.who_id, status=task.status, note=task.note, recurrence='none', key_result_id=key_result_id or None))
-
     db.session.commit()
     db.session.refresh(task)
     return jsonify({'success': True, 'task': task.to_dict(), 'message': 'Task saved successfully!'})
@@ -372,98 +356,82 @@ def api_get_task(task_id):
     ).get_or_404(task_id)
     return jsonify({'success': True, 'task': task.to_dict()})
 
-# HÀM 3: CẬP NHẬT HÀM api_dhtmlx_data
-@bp.route('/api/dhtmlx-data')
+
 @login_required
 def api_dhtmlx_data():
     project_id = request.args.get('project_id', type=int)
     if not project_id:
-        return jsonify({'data': []})
+        return jsonify({"data": []})
 
-    query = Project.query.options(
-        subqueryload(Project.builds)
-            .subqueryload(Build.objectives)
-            .subqueryload(Objective.key_results)
-            .subqueryload(KeyResult.tasks)
-            .joinedload(Task.assignee)
-    )
-    project = query.get(project_id)
-    
-    if not project:
-        return jsonify({'data': []})
+    # Tải trước tất cả dữ liệu liên quan để tránh N+1 query
+    project = Project.query.options(
+        subqueryload(Project.builds).subqueryload(Build.objectives)
+        .subqueryload(Objective.key_results).subqueryload(KeyResult.tasks)
+        .joinedload(Task.assignee) # Dùng joinedload cho quan hệ cuối cùng (assignee)
+    ).get_or_404(project_id)
 
     gantt_data = []
 
-    def calculate_progress(tasks):
-        if not tasks: return 0.0
-        done_count = sum(1 for t in tasks if t.status == 'Done')
-        return round(done_count / len(tasks), 4) if tasks else 0.0
+    def add_days_if_date(d, days):
+        return (d + timedelta(days=days)) if d else None
 
-    proj_id = f'proj-{project.id}'
     if project.start_date and project.end_date:
         gantt_data.append({
-            'id': proj_id, 'text': project.name,
-            'start_date': project.start_date.isoformat(),
-            'end_date': (project.end_date + timedelta(days=1)).isoformat(), # dhtmlx end date is exclusive
-            'type': 'project', 'open': True
+            "id": f"proj-{project.id}", "text": project.name,
+            "start_date": project.start_date.isoformat(),
+            "end_date": add_days_if_date(project.end_date, 1).isoformat(),
+            "type": "project", "open": True
         })
 
     for build in project.builds:
-        build_id = f'build-{build.id}'
-        if build.start_date and build.end_date:
-            build_tasks = [task for obj in build.objectives for kr in obj.key_results for task in kr.tasks]
-            gantt_data.append({
-                'id': build_id, 'text': build.name,
-                'start_date': build.start_date.isoformat(),
-                'end_date': (build.end_date + timedelta(days=1)).isoformat(),
-                'type': 'build', 'parent': proj_id,
-                'progress': calculate_progress(build_tasks), 'open': True
-            })
+        if not build.start_date or not build.end_date:
+            continue
+        gantt_data.append({
+            "id": f"build-{build.id}", "text": build.name,
+            "start_date": build.start_date.isoformat(),
+            "end_date": add_days_if_date(build.end_date, 1).isoformat(),
+            "type": "build", "parent": f"proj-{project.id}", "open": True
+        })
 
         for obj in build.objectives:
-            obj_id = f'obj-{obj.id}'
-            obj_tasks = [task for kr in obj.key_results for task in kr.tasks]
-            
-            if obj.start_date:
-                obj_end = max([t.task_date for t in obj_tasks if t.task_date] or [None], default=None)
-                # === SỬA LỖI: Thay timedelta(days=2) thành timedelta(days=1) ===
-                end_date_iso = (obj_end + timedelta(days=1)).isoformat() if obj_end else (obj.start_date + timedelta(days=1)).isoformat()
+            if not obj.start_date: continue
+            obj_end = obj.end_date or obj.start_date
+            gantt_data.append({
+                "id": f"obj-{obj.id}", "text": obj.content,
+                "start_date": obj.start_date.isoformat(),
+                "end_date": add_days_if_date(obj_end, 1).isoformat(),
+                "type": "objective", "parent": f"build-{build.id}", "open": True,
+                "progress": obj.progress / 100.0
+            })
+
+            for kr in obj.key_results:
+                task_dates = [t.task_date for t in kr.tasks if t.task_date]
+                start_date = kr.start_date or (min(task_dates) if task_dates else None)
+                end_date = kr.end_date or (max(task_dates) if task_dates else None)
+
+                if not start_date: continue
+                end_date = end_date or start_date
+
                 gantt_data.append({
-                    'id': obj_id, 'text': obj.content,
-                    'start_date': obj.start_date.isoformat(),
-                    'end_date': end_date_iso,
-                    'type': 'objective', 'parent': build_id,
-                    'progress': calculate_progress(obj_tasks), 'open': True
+                    "id": f"kr-{kr.id}", "text": kr.content,
+                    "start_date": start_date.isoformat(),
+                    "end_date": add_days_if_date(end_date, 1).isoformat(),
+                    "type": "key_result", "parent": f"obj-{obj.id}", "open": True,
+                    "progress": kr.progress / 100.0
                 })
 
-                for kr in obj.key_results:
-                    kr_id = f'kr-{kr.id}'
-                    kr_tasks = kr.tasks
-                    kr_start = min([t.task_date for t in kr_tasks if t.task_date] or [None], default=None)
-                    kr_end = max([t.task_date for t in kr_tasks if t.task_date] or [None], default=None)
-
-                    if kr_start and kr_end:
-                        gantt_data.append({
-                            'id': kr_id, 'text': kr.content,
-                            'start_date': kr_start.isoformat(),
-                            'end_date': (kr_end + timedelta(days=1)).isoformat(),
-                            'type': 'key_result', 'parent': obj_id,
-                            'progress': calculate_progress(kr_tasks), 'open': True
-                        })
-
-                    for task in kr_tasks:
-                        if task.task_date:
-                            gantt_data.append({
-                                'id': f'task-{task.id}', 'text': task.what,
-                                'start_date': task.task_date.isoformat(),
-                                'end_date': (task.task_date + timedelta(days=1)).isoformat(),
-                                'type': 'task', 'parent': kr_id,
-                                'owner': task.assignee.username if task.assignee else '',
-                                'progress': 1.0 if task.status == 'Done' else 0.0,
-                                'priority': task.priority or 'Medium'
-                            })
-
-    return jsonify({'data': gantt_data})
+                for task in kr.tasks: # Bây giờ task.assignee đã được tải sẵn
+                    if not task.task_date: continue
+                    gantt_data.append({
+                        "id": f"task-{task.id}", "text": task.what,
+                        "start_date": task.task_date.isoformat(),
+                        "end_date": add_days_if_date(task.task_date, 1).isoformat(),
+                        "type": "task", "parent": f"kr-{kr.id}",
+                        "assignee_name": task.assignee.username if task.assignee else "",
+                        "progress": 1.0 if task.status == 'Done' else 0.0,
+                    })
+                        
+    return jsonify({"data": gantt_data})
 
 @bp.route('/update-task-time', methods=['POST'])
 @login_required
@@ -605,7 +573,9 @@ def add_project():
         description=request.form.get('description'),
         status=request.form.get('status', 'Active'),
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        owner_id=request.form.get('owner_id') or None, # <-- THÊM/SỬA DÒNG NÀY
+        note=request.form.get('note') # <-- THÊM DÒNG NÀY
     )
     db.session.add(new_project)
     db.session.commit()
@@ -640,7 +610,8 @@ def add_objective():
         color=random.choice(colors), 
         owner_id=data.get('owner_id') or None, 
         project_id=project_id or None, 
-        build_id=data.get('build_id') or None
+        build_id=data.get('build_id') or None,
+        note=data.get('note') # <-- THÊM DÒNG NÀY
     )
     db.session.add(new_obj)
     db.session.commit()
@@ -680,6 +651,8 @@ def add_key_result():
         content=data['content'], 
         start_date=start_date,
         end_date=end_date,
+        owner_id=data.get('owner_id') or None,
+        note=data.get('note'),
         target=0, 
         current=0
     )
@@ -688,54 +661,171 @@ def add_key_result():
     db.session.add(Log(action=f"Added KR to Objective ID {data['objective_id']}: '{data['content']}'", user_id=current_user.id))
     db.session.commit()
     
-    return jsonify({ 'success': True, 'kr': { 'id': new_kr.id, 'content': new_kr.content, 'progress': 0, 'current': 0, 'target': 0, 'objective_id': new_kr.objective_id } })
+    return jsonify({ 'success': True, 'kr': { 'id': new_kr.id, 'content': new_kr.content, 'progress': 0, 'current': 0, 'target': 0, 'objective_id': new_kr.objective_id, 'owner_id': new_kr.owner_id, 'note': new_kr.note } })
     
 @bp.route('/update-task-status/<int:task_id>', methods=['POST'])
 @login_required
 def update_task_from_okr(task_id):
     task = Task.query.get_or_404(task_id)
+    # Sửa lỗi 1: Đảm bảo task có KR trước khi tiếp tục
+    if not task.key_result_id:
+        task.status = 'Done' if request.json.get('checked') else 'Pending'
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Task status updated (task is not linked to an OKR).'
+        })
+
     task.status = 'Done' if request.json.get('checked') else 'Pending'
     db.session.commit()
-    
     status_text = "Hoàn thành" if task.status == 'Done' else "Chuyển về Pending"
     db.session.add(Log(action=f"{status_text} Task ID {task.id}: '{task.what}'", user_id=current_user.id))
-    db.session.commit()
     
+    # Chỉ cần gọi hàm cập nhật KR, nó đã commit thay đổi bên trong
     kr = recalculate_kr_progress(task.key_result_id)
     
+    # Sửa lỗi 2: Không gọi hàm recalculate_parents_progress nữa
+    # Objective và các cấp cao hơn sẽ tự động tính toán lại progress
+    # Chúng ta chỉ cần refresh để lấy giá trị mới nhất cho response
+    db.session.refresh(kr)
+    db.session.refresh(kr.objective)
+
     return jsonify({
-        'success': True, 'message': 'Task status and KR progress updated', 
-        'kr_id': kr.id, 'objective_id': kr.objective_id,
-        'kr_progress': kr.progress, 'obj_progress': kr.objective.progress,
-        'kr_current': kr.current, 'kr_target': kr.target
+        'success': True, 
+        'message': 'Task status and KR progress updated',
+        'kr_id': kr.id, 
+        'objective_id': kr.objective_id,
+        'kr_progress': kr.progress, 
+        'obj_progress': kr.objective.progress, # Giá trị này giờ đã được tự động cập nhật
+        'kr_current': kr.current, 
+        'kr_target': kr.target
     })
-    
+# === SỬA LỖI: THÊM LẠI DÒNG @bp.route BỊ THIẾU ===
 @bp.route('/update/<item_type>/<int:item_id>', methods=['POST'])
 @login_required
 def update_okr_item(item_type, item_id):
     model_map = {'objective': Objective, 'key_result': KeyResult, 'task': Task}
     Model = model_map.get(item_type)
-    if not Model: return jsonify({'success': False, 'message': 'Type not suitable'}), 400
-    
+    if not Model:
+        return jsonify({'success': False, 'message': 'Invalid item type'}), 400
     item = Model.query.get_or_404(item_id)
-    data = request.json
-    
-    # Cập nhật ngày tháng (nếu có)
-    if 'start_date' in data and 'end_date' in data:
-        # === SỬA ĐỔI Ở ĐÂY ===
-        start_date_str = (data.get('start_date') or '').strip()
-        end_date_str = (data.get('end_date') or '').strip()
-        try:
-            item.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
-            item.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
-        except (ValueError, TypeError):
-            # Bỏ qua nếu định dạng ngày không hợp lệ
-            pass
-            
-    db.session.commit()
-    db.session.add(Log(action=f"Cập nhật {item_type} ID {item.id}", user_id=current_user.id))
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Item updated successfully'})
+    data = request.json if request.is_json else request.form
+    try:
+        if 'content' in data: item.content = data.get('content')
+        if 'note' in data: item.note = data.get('note')
+        if 'owner_id' in data:
+            owner_id = data.get('owner_id')
+            item.owner_id = int(owner_id) if owner_id else None
+        start_date_str = None
+        end_date_str = None
+        if item_type == 'objective':
+            item.project_id = int(data.get('project_id')) if data.get('project_id') else None
+            item.build_id = int(data.get('build_id')) if data.get('build_id') else None
+            start_date_str = data.get('start_date_obj') or data.get('start_date')
+            end_date_str = data.get('end_date_obj') or data.get('end_date')
+        elif item_type in ['key_result', 'task']:
+            start_date_str = data.get('start_date')
+            end_date_str = data.get('end_date')
+        if start_date_str is not None:
+            start_val = (start_date_str or '').strip()
+            item.start_date = datetime.strptime(start_val, '%Y-%m-%d').date() if start_val else None
+        if end_date_str is not None:
+            end_val = (end_date_str or '').strip()
+            item.end_date = datetime.strptime(end_val, '%Y-%m-%d').date() if end_val else None
+        db.session.commit()
+        db.session.add(Log(action=f"Updated {item_type} ID {item.id}", user_id=current_user.id))
+        db.session.commit()
+        if not request.is_json:
+            flash(f'{item_type.capitalize()} updated successfully!', 'success')
+            project_id_to_redirect = getattr(item, 'project_id', None)
+            if item_type == 'key_result' and item.objective:
+                 project_id_to_redirect = item.objective.project_id
+            if project_id_to_redirect:
+                return redirect(url_for('main.project_workspace', project_id=project_id_to_redirect, tab='okr'))
+            return redirect(request.referrer or url_for('main.okr_page'))
+        return jsonify({'success': True, 'message': 'Item updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating {item_type} ID {item_id}: {e}")
+        if not request.is_json:
+            flash(f'Error updating item: {str(e)}', 'danger')
+            return redirect(request.referrer)
+        return jsonify({'success': False, 'message': f'An error occurred: {str(e)}'}), 500
+@bp.route('/api/objective/<int:obj_id>')
+@login_required
+def api_get_objective(obj_id):
+    obj = Objective.query.get_or_404(obj_id)
+    return jsonify({
+        'success': True,
+        'objective': {
+            'id': obj.id, 'content': obj.content,
+            'owner_id': obj.owner_id or '', 'project_id': obj.project_id or '',
+            'build_id': obj.build_id or '', 'note': obj.note or '',
+            'start_date': obj.start_date.isoformat() if obj.start_date else '',
+            'end_date': obj.end_date.isoformat() if obj.end_date else ''
+        }
+    })
+        
+@login_required
+def update_okr_item(item_type, item_id):
+    model_map = {'objective': Objective, 'key_result': KeyResult, 'task': Task}
+    Model = model_map.get(item_type)
+    if not Model:
+        return jsonify({'success': False, 'message': 'Invalid item type'}), 400
+
+    item = Model.query.get_or_404(item_id)
+    data = request.json if request.is_json else request.form
+
+    try:
+        if 'content' in data: item.content = data.get('content')
+        if 'note' in data: item.note = data.get('note')
+        if 'owner_id' in data:
+            owner_id = data.get('owner_id')
+            item.owner_id = int(owner_id) if owner_id else None
+
+        start_date_str = None
+        end_date_str = None
+        if item_type == 'objective':
+            item.project_id = int(data.get('project_id')) if data.get('project_id') else None
+            item.build_id = int(data.get('build_id')) if data.get('build_id') else None
+            start_date_str = data.get('start_date_obj') or data.get('start_date')
+            end_date_str = data.get('end_date_obj') or data.get('end_date')
+        elif item_type == 'key_result':
+            start_date_str = data.get('start_date')
+            end_date_str = data.get('end_date')
+        elif item_type == 'task':
+            start_date_str = data.get('start_date')
+            end_date_str = data.get('end_date')
+
+        if start_date_str is not None:
+            start_val = (start_date_str or '').strip()
+            item.start_date = datetime.strptime(start_val, '%Y-%m-%d').date() if start_val else None
+        if end_date_str is not None:
+            end_val = (end_date_str or '').strip()
+            item.end_date = datetime.strptime(end_val, '%Y-%m-%d').date() if end_val else None
+
+        db.session.commit()
+        db.session.add(Log(action=f"Updated {item_type} ID {item.id}", user_id=current_user.id))
+        db.session.commit()
+
+        if not request.is_json:
+            flash(f'{item_type.capitalize()} updated successfully!', 'success')
+            project_id_to_redirect = getattr(item, 'project_id', None)
+            if item_type == 'key_result' and item.objective:
+                 project_id_to_redirect = item.objective.project_id
+            if project_id_to_redirect:
+                return redirect(url_for('main.project_workspace', project_id=project_id_to_redirect, tab='okr'))
+            return redirect(request.referrer or url_for('main.okr_page'))
+        
+        return jsonify({'success': True, 'message': 'Item updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating {item_type} ID {item_id}: {e}")
+        if not request.is_json:
+            flash(f'Error updating item: {str(e)}', 'danger')
+            return redirect(request.referrer)
+        return jsonify({'success': False, 'message': f'An error occurred: {str(e)}'}), 500
 
 
 
@@ -753,20 +843,33 @@ def delete_item(item_type, item_id):
 
     if item_type == 'task':
         kr_id = item.key_result_id
+        objective_id = item.key_result.objective_id if item.key_result else None
+        
         db.session.delete(item)
         db.session.commit()
+
         if kr_id:
-            kr = recalculate_kr_progress(kr_id)
+            kr = recalculate_kr_progress(kr_id) # Chỉ cần cập nhật KR
+            # Objective sẽ tự động cập nhật. Refresh để lấy giá trị mới.
+            db.session.refresh(kr)
+            db.session.refresh(kr.objective)
+
             if kr:
                 response_data.update({
                     'kr_id': kr.id, 'objective_id': kr.objective_id,
                     'kr_progress': kr.progress, 'obj_progress': kr.objective.progress,
                     'kr_current': kr.current, 'kr_target': kr.target
                 })
+
     elif item_type == 'key_result':
         obj = item.objective
+        
         db.session.delete(item)
         db.session.commit()
+        
+        # Không cần gọi hàm tính toán nào cả, chỉ cần refresh để lấy giá trị mới
+        db.session.refresh(obj)
+        
         response_data.update({'objective_id': obj.id, 'obj_progress': obj.progress})
     else:
         db.session.delete(item)
@@ -808,14 +911,20 @@ def save_task_report(task_id):
 def search():
     query = request.args.get('q', '').strip()
     if not query:
-        return render_template('search_results.html', query=query, tasks=[], objectives=[], key_results=[])
+        return render_template('search_results.html', query=query, results={})
 
     search_term = f"%{query}%"
-    tasks = Task.query.filter(or_(Task.what.ilike(search_term), Task.note.ilike(search_term))).all()
-    objectives = Objective.query.filter(Objective.content.ilike(search_term)).options(joinedload(Objective.project)).all()
-    key_results = KeyResult.query.filter(KeyResult.content.ilike(search_term)).options(joinedload(KeyResult.objective)).all()
 
-    return render_template('search_results.html', page_name='search', query=query, tasks=tasks, objectives=objectives, key_results=key_results)
+    results = {
+        'tasks': Task.query.filter(or_(Task.what.ilike(search_term), Task.note.ilike(search_term))).limit(20).all(),
+        'objectives': Objective.query.filter(Objective.content.ilike(search_term)).limit(20).all(),
+        'key_results': KeyResult.query.filter(KeyResult.content.ilike(search_term)).limit(20).all(),
+        'projects': Project.query.filter(or_(Project.name.ilike(search_term), Project.description.ilike(search_term))).limit(20).all(),
+        'notes': Note.query.filter(or_(Note.title.ilike(search_term), Note.content.ilike(search_term))).limit(20).all(),
+        'files': UploadedFile.query.filter(UploadedFile.original_filename.ilike(search_term)).limit(20).all()
+    }
+
+    return render_template('search_results.html', page_name='search', query=query, results=results)
 @bp.route('/api/projects')
 @login_required
 def api_projects_list():
@@ -942,7 +1051,85 @@ def uploads_manager():
         total_files=len(all_files),
         per_page=per_page
     )
+# SỬA LỖI NÀY - Tìm hàm có tên @bp.route('/api/dhtmlx-data')
+@bp.route('/api/dhtmlx-data')
+@login_required
+def api_dhtmlx_data():
+    project_id = request.args.get('project_id', type=int)
+    if not project_id:
+        return jsonify({"data": []})
 
+    # Tải trước tất cả dữ liệu liên quan để tránh N+1 query
+    project = Project.query.options(
+        subqueryload(Project.builds).subqueryload(Build.objectives)
+        .subqueryload(Objective.key_results).subqueryload(KeyResult.tasks)
+        .joinedload(Task.assignee) # Dùng joinedload cho quan hệ cuối cùng (assignee)
+    ).get_or_404(project_id)
+
+    gantt_data = []
+
+    def add_days_if_date(d, days):
+        return (d + timedelta(days=days)) if d else None
+
+    if project.start_date and project.end_date:
+        gantt_data.append({
+            "id": f"proj-{project.id}", "text": project.name,
+            "start_date": project.start_date.isoformat(),
+            "end_date": add_days_if_date(project.end_date, 1).isoformat(),
+            "type": "project", "open": True,
+            "progress": project.progress / 100.0  # <<< THÊM DÒNG NÀY
+        })
+
+    for build in project.builds:
+        if not build.start_date or not build.end_date:
+            continue
+        gantt_data.append({
+            "id": f"build-{build.id}", "text": build.name,
+            "start_date": build.start_date.isoformat(),
+            "end_date": add_days_if_date(build.end_date, 1).isoformat(),
+            "type": "build", "parent": f"proj-{project.id}", "open": True,
+            "progress": build.progress / 100.0  # <<< THÊM DÒNG NÀY
+        })
+
+        for obj in build.objectives:
+            if not obj.start_date: continue
+            obj_end = obj.end_date or obj.start_date
+            gantt_data.append({
+                "id": f"obj-{obj.id}", "text": obj.content,
+                "start_date": obj.start_date.isoformat(),
+                "end_date": add_days_if_date(obj_end, 1).isoformat(),
+                "type": "objective", "parent": f"build-{build.id}", "open": True,
+                "progress": obj.progress / 100.0
+            })
+
+            for kr in obj.key_results:
+                task_dates = [t.task_date for t in kr.tasks if t.task_date]
+                start_date = kr.start_date or (min(task_dates) if task_dates else None)
+                end_date = kr.end_date or (max(task_dates) if task_dates else None)
+
+                if not start_date: continue
+                end_date = end_date or start_date
+
+                gantt_data.append({
+                    "id": f"kr-{kr.id}", "text": kr.content,
+                    "start_date": start_date.isoformat(),
+                    "end_date": add_days_if_date(end_date, 1).isoformat(),
+                    "type": "key_result", "parent": f"obj-{obj.id}", "open": True,
+                    "progress": kr.progress / 100.0
+                })
+
+                for task in kr.tasks: # Bây giờ task.assignee đã được tải sẵn
+                    if not task.task_date: continue
+                    gantt_data.append({
+                        "id": f"task-{task.id}", "text": task.what,
+                        "start_date": task.task_date.isoformat(),
+                        "end_date": add_days_if_date(task.task_date, 1).isoformat(),
+                        "type": "task", "parent": f"kr-{kr.id}",
+                        "assignee_name": task.assignee.username if task.assignee else "",
+                        "progress": 1.0 if task.status == 'Done' else 0.0,
+                    })
+                        
+    return jsonify({"data": gantt_data})
 
 @bp.route('/projects')
 @login_required
@@ -1046,6 +1233,8 @@ def update_project_details(project_id):
     project.name = request.form.get('name')
     project.description = request.form.get('description')
     project.status = request.form.get('status')
+    project.owner_id = request.form.get('owner_id') or None # <-- THÊM DÒNG NÀY
+    project.note = request.form.get('note') # <-- THÊM DÒNG NÀY
     start_date_str = request.form.get('start_date')
     end_date_str = request.form.get('end_date')
     project.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
@@ -1053,7 +1242,6 @@ def update_project_details(project_id):
     db.session.commit()
     
     flash(f'Project "{project.name}" updated successfully!', 'success')
-    # SỬA LỖI: Điều hướng về workspace và chọn đúng project vừa sửa
     return redirect(url_for('main.project_workspace', project_id=project_id))
 
 @bp.route('/delete-project/<int:project_id>', methods=['POST'])
@@ -1091,7 +1279,9 @@ def add_build():
         project_id=project_id,
         start_date=start_date,
         end_date=end_date,
-        schedule_link=schedule_link
+        schedule_link=schedule_link,
+        owner_id=request.form.get('owner_id') or None, # <-- THÊM DÒNG NÀY
+        note=request.form.get('note') # <-- THÊM DÒNG NÀY
     )
     db.session.add(new_build)
     db.session.commit()
@@ -1108,10 +1298,9 @@ def update_build_details(build_id):
     build.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
     build.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
     build.project_id = request.form.get('project_id')
-
-    # === ADD THIS LINE ===
-    build.schedule_link = request.form.get('schedule_link') # Thêm dòng này để lưu link
-    # =====================
+    build.owner_id = request.form.get('owner_id') or None # <-- THÊM DÒNG NÀY
+    build.note = request.form.get('note') # <-- THÊM DÒNG NÀY
+    build.schedule_link = request.form.get('schedule_link')
 
     db.session.commit()
     flash(f'Build "{build.name}" updated successfully!', 'success')
@@ -1777,9 +1966,6 @@ def all_okr_data():
         'objectives': objectives_dict,
         'key_results': key_results_dict
     })
-# routes.py
-
-# TÌM HÀM NÀY VÀ THAY THẾ BẰNG CODE BÊN DƯỚI
 @bp.route('/api/project/<int:project_id>')
 @login_required
 def api_get_project(project_id):
@@ -1790,9 +1976,10 @@ def api_get_project(project_id):
         'description': project.description,
         'start_date': project.start_date.isoformat() if project.start_date else '',
         'end_date': project.end_date.isoformat() if project.end_date else '',
-        'status': project.status
+        'status': project.status,
+        'owner_id': project.owner_id or '', # <-- THÊM DÒNG NÀY
+        'note': project.note or '' # <-- THÊM DÒNG NÀY
     })
-
 
 @bp.route('/api/build/<int:build_id>')
 @login_required
@@ -1804,11 +1991,10 @@ def api_get_build(build_id):
         'project_id': build.project_id,
         'start_date': build.start_date.isoformat() if build.start_date else '',
         'end_date': build.end_date.isoformat() if build.end_date else '',
-        'schedule_link': build.schedule_link or ''
+        'schedule_link': build.schedule_link or '',
+        'owner_id': build.owner_id or '', # <-- THÊM DÒNG NÀY
+        'note': build.note or '' # <-- THÊM DÒNG NÀY
     })
-
-
-
 @bp.route('/api/gantt-data')
 @login_required
 def gantt_data():
@@ -1878,51 +2064,13 @@ def timeline_page():
                            project_name=project_name)
 
 
-
 # NÂNG CẤP API ĐỂ CUNG CẤP THÊM DỮ LIỆU CHO VIỆC TÔ MÀU
 def calculate_progress(tasks):
     if not tasks:
         return 0.0
     done_count = sum(1 for t in tasks if t.status == 'Done')
     return round(done_count / len(tasks), 4)  # làm tròn 4 chữ số để Gantt mượt hơn
-# Route cũ để điều hướng
-@bp.route('/gantt')
-def gantt_redirect():
-    project_id = request.args.get('project_id')
-    if project_id:
-        return redirect(url_for('main.timeline_page', project_id=project_id))
-    return redirect(url_for('main.timeline_page'))
-@bp.route('/api/objective/<int:obj_id>')
-@login_required
-def api_get_objective(obj_id):
-    obj = Objective.query.get_or_404(obj_id)
-    return jsonify({
-        'success': True,
-        'objective': {
-            'id': obj.id,
-            'content': obj.content,
-            'owner_id': obj.owner_id,
-            'project_id': obj.project_id,
-            'build_id': obj.build_id,
-            'start_date': obj.start_date.isoformat() if obj.start_date else '',
-            'end_date': obj.end_date.isoformat() if obj.end_date else ''
-        }
-    })
-# THÊM MỚI: API để lấy chi tiết một Key Result
-@bp.route('/api/key-result/<int:kr_id>')
-@login_required
-def api_get_key_result(kr_id):
-    kr = KeyResult.query.get_or_404(kr_id)
-    return jsonify({
-        'success': True,
-        'key_result': {
-            'id': kr.id,
-            'content': kr.content,
-            'start_date': kr.start_date.isoformat() if kr.start_date else '',
-            'end_date': kr.end_date.isoformat() if kr.end_date else ''
-        }
-    })
-# THÊM HÀM MỚI NÀY VÀO CUỐI FILE app/routes.py
+
 
 @bp.route('/api/kr-context/<int:kr_id>')
 @login_required
@@ -1949,7 +2097,47 @@ def get_kr_context(kr_id):
             'key_result_id': kr.id
         }
     })
-# Thêm vào cuối file app/routes.py
+@bp.route('/gantt')
+def gantt_redirect():
+    project_id = request.args.get('project_id')
+    if project_id:
+        return redirect(url_for('main.timeline_page', project_id=project_id))
+    return redirect(url_for('main.timeline_page'))
+
+
+@login_required
+def api_get_objective(obj_id):
+    obj = Objective.query.get_or_404(obj_id)
+    return jsonify({
+        'success': True,
+        'objective': {
+            'id': obj.id,
+            'content': obj.content,
+            'owner_id': obj.owner_id or '',
+            'project_id': obj.project_id or '',
+            'build_id': obj.build_id or '',
+            'note': obj.note or '',
+            'start_date': obj.start_date.isoformat() if obj.start_date else '',
+            'end_date': obj.end_date.isoformat() if obj.end_date else ''
+        }
+    })
+
+@bp.route('/api/key-result/<int:kr_id>')
+@login_required
+def api_get_key_result(kr_id):
+    kr = KeyResult.query.get_or_404(kr_id)
+    return jsonify({
+        'success': True,
+        'key_result': {
+            'id': kr.id,
+            'content': kr.content,
+            'owner_id': kr.owner_id or '',
+            'note': kr.note or '',
+            'start_date': kr.start_date.isoformat() if kr.start_date else '',
+            'end_date': kr.end_date.isoformat() if kr.end_date else ''
+        }
+    })
+# =========================================================
 
 @bp.route('/api/objectives/update-order', methods=['POST'])
 @login_required

@@ -95,25 +95,47 @@ class Project(db.Model):
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default='Active', server_default='Active')
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    owner = db.relationship('User', backref='projects_owned')
     objectives = db.relationship('Objective', backref='project', cascade="all, delete-orphan")
     builds = db.relationship('Build', backref='project', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def progress(self):
+        """Tính tiến độ trung bình của tất cả Build trong Project."""
+        all_builds = self.builds
+        if not all_builds:
+            # Nếu không có build, thử tính qua objective không gán vào build
+            unassigned_objectives = [o for o in self.objectives if not o.build_id]
+            if not unassigned_objectives:
+                return 0
+            progress_values = [obj.progress for obj in unassigned_objectives if obj.progress is not None]
+        else:
+            progress_values = [b.progress for b in all_builds if b.progress is not None]
+
+        if not progress_values:
+            return 0
+        
+        return sum(progress_values) / len(progress_values)
     
 
 class Build(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id',use_alter=True), nullable=True)
     schedule_link = db.Column(db.String(500), nullable=True) 
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    owner = db.relationship('User', backref='builds_owned')
     
-    # SỬA LỖI: Bỏ lazy='dynamic' để cho phép tính toán tiến độ hiệu quả
     objectives = db.relationship('Objective', backref='build', cascade="all, delete-orphan")
 
     @property
     def progress(self):
-        """Calculate the average progress of all objectives in this build."""
-        # Bây giờ self.objectives là một list (nếu được tải trước)
+        """Tính tiến độ trung bình của tất cả Objective trong Build."""
         objectives_list = self.objectives
         if not objectives_list:
             return 0
@@ -128,6 +150,7 @@ class Build(db.Model):
     def __repr__(self):
         return f'<Build {self.name}>'
 
+# TÌM CLASS Objective VÀ THAY THẾ TOÀN BỘ BẰNG CODE NÀY
 class Objective(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(500), nullable=False)
@@ -138,17 +161,17 @@ class Objective(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'))
     build_id = db.Column(db.Integer, db.ForeignKey('build.id'))
     position = db.Column(db.Integer, default=0, nullable=False)
-    # SỬA LỖI: Bỏ lazy='dynamic' để cho phép tải trước dữ liệu
-    key_results = db.relationship('KeyResult', backref='objective', cascade="all, delete-orphan", order_by='KeyResult.id')
+    
+    note = db.Column(db.Text, nullable=True)
 
+    key_results = db.relationship('KeyResult', backref='objective', cascade="all, delete-orphan", order_by='KeyResult.id')
 
     @property
     def progress(self):
         krs = self.key_results
-        # Vì đã bỏ lazy='dynamic', krs giờ là một list
         if not krs: return 0
         return sum(kr.progress for kr in krs) / len(krs)
-
+# TÌM CLASS KeyResult VÀ THAY THẾ TOÀN BỘ BẰNG CODE NÀY
 class KeyResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(500), nullable=False)
@@ -157,6 +180,11 @@ class KeyResult(db.Model):
     current = db.Column(db.Float, default=0)
     target = db.Column(db.Float, default=1)
     objective_id = db.Column(db.Integer, db.ForeignKey('objective.id'), nullable=False)
+    
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    owner = db.relationship('User', backref='key_results')
+    
     tasks = db.relationship('Task', backref='key_result', cascade="all, delete-orphan")
 
     @property
@@ -176,11 +204,12 @@ class UploadedFile(db.Model):
     file_size = db.Column(db.Integer)
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     uploader_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id', use_alter=True), nullable=True)
     
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=True)
     note_id = db.Column(db.Integer, db.ForeignKey('note.id'), nullable=True)
     upload_source = db.Column(db.String(50), default='attachment')
-    
+    project = db.relationship('Project', backref=db.backref('attachments', lazy='dynamic'))
     
     def to_dict(self):
         return {
@@ -197,6 +226,13 @@ class UploadedFile(db.Model):
         return self.upload_date + timedelta(hours=7)
     def context(self):
         if self.upload_source == 'direct':
+            # === CẬP NHẬT LOGIC CONTEXT ===
+            if self.project_id and self.project:
+                return {
+                    'text': 'Project File',
+                    'url': url_for('main.project_workspace', project_id=self.project_id)
+                }
+            # ===============================
             return {'text': 'Tải lên trực tiếp', 'url': None}
         
         if self.task_id and self.task:

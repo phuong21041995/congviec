@@ -109,7 +109,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
-        
+        // Bên trong hàm uploadFile, ngay trước khi fetch(INIT_URL, ...)
+		const projectSelect = document.getElementById('uploadProjectSelect');
+		const projectId = projectSelect ? projectSelect.value : null;
+
+		// ----- BƯỚC 1: BÁO CÁO LÊN SERVER ĐỂ LẤY UPLOAD_ID -----
+		updateProgress(0, 'Khởi tạo...');
+		const initResponse = await fetch(INIT_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ 
+				filename: file.name, 
+				total_size: file.size,
+				project_id: projectId // <-- Gửi project_id đi
+			})
+		});
         const progressId = `progress-${Math.random().toString(36).substr(2, 9)}`;
         const progressHTML = `
             <div class="upload-item" id="${progressId}">

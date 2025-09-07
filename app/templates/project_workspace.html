@@ -2,7 +2,9 @@
 {% block title %}Project Workspace{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/dhtmlxgantt/dhtmlxgantt.css') }}">
+
+
 <style>
   :root { 
     --sidebar-width: 320px; 
@@ -196,8 +198,12 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script src="{{ url_for('static', filename='vendor/dhtmlxgantt/dhtmlxgantt.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/sortablejs/Sortable.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/confetti/confetti.browser.min.js') }}"></script>
+
+
 <script>
     window.SAVE_TASK_URL = "{{ url_for('main.save_task') }}";
     window.DELETE_TASK_URL_BASE = "{{ url_for('main.delete_task', task_id=0) }}".replace('/0', '/');
@@ -247,6 +253,10 @@ document.addEventListener('DOMContentLoaded', function(){
             document.getElementById('editProjectStartDate').value = data.start_date || '';
             document.getElementById('editProjectEndDate').value = data.end_date || '';
             document.getElementById('editProjectStatus').value = data.status || 'Active';
+			            // THÊM 2 DÒNG NÀY
+            document.getElementById('editProjectOwner').value = data.owner_id || '';
+            document.getElementById('editProjectNote').value = data.note || '';
+
             new bootstrap.Modal(document.getElementById('editProjectModal')).show();
         }
         const editBuildBtn = event.target.closest('.btn-edit-build');
@@ -262,35 +272,79 @@ document.addEventListener('DOMContentLoaded', function(){
             document.getElementById('editBuildStartDate').value = data.start_date || '';
             document.getElementById('editBuildEndDate').value = data.end_date || '';
             document.getElementById('editBuildScheduleLink').value = data.schedule_link || ''; 
+			            // THÊM 2 DÒNG NÀY
+            document.getElementById('editBuildOwner').value = data.owner_id || '';
+            document.getElementById('editBuildNote').value = data.note || '';
+            
             new bootstrap.Modal(document.getElementById('editBuildModal')).show();
         }
     });
     if (activeTab === 'okr') {
         const okrContent = document.getElementById('okr-tab-content');
-        if (okrContent) {
-            okrContent.addEventListener('change', function(event) {
-                if (event.target.matches('.task-checkbox')) {
-                    const checkbox = event.target;
-                    const taskId = checkbox.dataset.id;
-                    const isChecked = checkbox.checked;
-                    const url = window.UPDATE_TASK_STATUS_URL_BASE + taskId;
-                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ checked: isChecked }) })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            const actionItem = checkbox.closest('.action-item');
-                            actionItem.querySelector('.action-text').classList.toggle('done', isChecked);
-                            const krBlock = actionItem.closest('.kr-block');
-                            krBlock.querySelector(`#kr-progress-bar-${data.kr_id}`).style.width = `${data.kr_progress}%`;
-                            krBlock.querySelector(`#kr-progress-text-${data.kr_id}`).textContent = `${Math.round(data.kr_current)}/${Math.round(data.kr_target)}`;
-                            const objBlock = krBlock.closest('.objective-block');
-                            objBlock.querySelector(`#obj-progress-bar-${data.objective_id}`).style.width = `${data.obj_progress}%`;
-                            objBlock.querySelector(`#obj-progress-text-${data.objective_id}`).textContent = `${Math.round(data.obj_progress)}%`;
-                        } else { checkbox.checked = !isChecked; }
-                    }).catch(() => { checkbox.checked = !isChecked; });
-                }
-            });
-        }
+		if (okrContent) {
+			okrContent.addEventListener('change', function(event) {
+				if (event.target.matches('.task-checkbox')) {
+					const checkbox = event.target;
+					const taskId = checkbox.dataset.id;
+					const isChecked = checkbox.checked;
+					const url = window.UPDATE_TASK_STATUS_URL_BASE + taskId;
+
+					fetch(url, { 
+						method: 'POST', 
+						headers: { 'Content-Type': 'application/json' }, 
+						body: JSON.stringify({ checked: isChecked }) 
+					})
+					.then(res => res.json())
+					.then(data => {
+						if (data.success) {
+							// 1. Cập nhật giao diện ngay lập tức, không cần reload
+							const actionItem = checkbox.closest('.action-item');
+							actionItem.querySelector('.action-text').classList.toggle('done', isChecked);
+
+							const krBlock = actionItem.closest('.kr-block');
+							const krProgressBar = krBlock.querySelector(`#kr-progress-bar-${data.kr_id}`);
+							const krProgressText = krBlock.querySelector(`#kr-progress-text-${data.kr_id}`);
+
+							if(krProgressBar) krProgressBar.style.width = `${data.kr_progress}%`;
+							if(krProgressText) krProgressText.textContent = `${data.kr_current.toFixed(1)}/${data.kr_target.toFixed(1)}`;
+
+							const objBlock = krBlock.closest('.objective-block');
+							const objProgressBar = objBlock.querySelector(`#obj-progress-bar-${data.objective_id}`);
+							const objProgressText = objBlock.querySelector(`#obj-progress-text-${data.objective_id}`);
+							const objHeaderProgress = objBlock.querySelector('.objective-header .badge'); // Cập nhật cả % ở header
+
+							if(objProgressBar) objProgressBar.style.width = `${data.obj_progress}%`;
+							if(objProgressText) objProgressText.textContent = `${Math.round(data.obj_progress)}%`;
+							if(objHeaderProgress) objHeaderProgress.textContent = `${data.obj_progress.toFixed(1)}%`;
+
+							// 2. Thêm hiệu ứng "tung hoa" khi hoàn thành công việc
+							if (isChecked) {
+								const rect = checkbox.getBoundingClientRect();
+								const origin = {
+									x: (rect.left + rect.right) / 2 / window.innerWidth,
+									y: (rect.top + rect.bottom) / 2 / window.innerHeight
+								};
+								confetti({
+									particleCount: 100,
+									spread: 70,
+									origin: origin
+								});
+							}
+
+						} else { 
+							// Nếu có lỗi từ server, trả lại trạng thái cũ của checkbox
+							checkbox.checked = !isChecked; 
+							alert(data.message || "An error occurred.");
+						}
+					}).catch((err) => { 
+						// Xử lý lỗi mạng
+						checkbox.checked = !isChecked; 
+						console.error("Fetch Error:", err);
+						alert("Could not connect to the server.");
+					});
+				}
+			});
+		}
         const okrFilterControls = document.getElementById('okrFilterControls');
         if (okrFilterControls) {
             okrFilterControls.addEventListener('click', function(e) {
@@ -344,7 +398,7 @@ document.addEventListener('DOMContentLoaded', function(){
                 endDate.setDate(endDate.getDate() - 1);
                 return dateToStr(endDate);
             }},
-			{ name: "owner", label: "Assignee", align: "center", resize: true, width: 100, template: t => t.owner || "" },
+			{ name: "assignee_name", label: "Assignee", align: "center", resize: true, width: 100, template: t => t.assignee_name || "" },
 			{ name: "progress", label: "%", align: "center", resize: true, width: 60, template: t => Math.round((t.progress || 0) * 100) + "%" }
 		];
 		gantt.config.date_format = "%Y-%m-%d";

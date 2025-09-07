@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Project Timeline{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css">
+<style>
+  .gantt_container{border-radius:.5rem;border:1px solid #dee2e6}
+  .gantt_grid_scale .gantt_grid_head_cell,.gantt_task_scale .gantt_scale_cell{background:#f8f9fa;font-weight:700}
+  .gantt_task_row,.gantt_grid_data .gantt_row{border-bottom:1px solid #e9ecef}
+
+  .gantt_grid_data .gantt_cell,
+  .gantt_grid_scale .gantt_grid_head_cell{white-space:nowrap; text-overflow:ellipsis; overflow:hidden}
+
+  #gantt_here .weekend .gantt_task_cell,#gantt_here .weekend .gantt_scale_cell{background:#fafafa}
+  .gantt_marker.today .gantt_marker_content{background:#ff4757;color:#ff4757}
+  .gantt_marker.today { z-index: 6; }
+
+  .gantt_task_line.type-project{background:#2563eb;border-color:#1d4ed8}
+  .gantt_task_line.type-build{background:#6b7280;border-color:#4b5563}
+  .gantt_task_line.type-objective{background:#06b6d4;border-color:#0891b2}
+  .gantt_task_line.type-key_result{background:#22c55e;border-color:#16a34a}
+  .gantt_task_line.type-task{background:#94a3b8;border-color:#64748b}
+  .gantt_task_line .gantt_task_progress{opacity:.25}
+
+  .grid-link{text-decoration:none}
+  .lbl-project{font-weight:800;font-size:1.05rem;color:#2563eb}
+  .lbl-build{font-weight:700;font-size:.96rem;color:#374151}
+  .lbl-objective{font-weight:700;font-style:italic;font-size:.96rem;color:#0e7490}
+  .lbl-key_result{font-style:italic;font-size:.96rem;color:#15803d}
+  .lbl-task{font-size:.92rem;color:#334155}
+
+  .legend-badge{border-radius:.4rem;padding:.25rem .5rem;font-weight:600}
+
+  .gantt_task_line.status_done{ opacity:.45; }
+  .gantt_grid_data .gantt_row.status_done .grid-link{ text-decoration:line-through; opacity:.75; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="m-0"><i class="fa-solid fa-timeline me-2"></i>Project Timeline:
+    <span class="text-primary">{{ project_name }}</span>
+  </h2>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="btn-group" role="group">
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('year')">Year</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('month')">Month</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.setLevel('week')">Week</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.zoomIn()">+</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="gantt.ext.zoom.zoomOut()">-</button>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" id="btnToday">Today</button>
+    <button class="btn btn-outline-secondary btn-sm" id="btnFit">Fit</button>
+
+    <div class="input-group input-group-sm" style="width:240px;">
+      <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <input id="ganttSearch" class="form-control" placeholder="Search tasks...">
+    </div>
+    <div class="input-group input-group-sm" style="width:220px;">
+      <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+      <select id="ownerFilter" class="form-select"><option value="">All assignees</option></select>
+    </div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="toggleDone" checked>
+      <label class="form-check-label small" for="toggleDone">Show done</label>
+    </div>
+    <a href="{{ url_for('main.projects_list') }}" class="btn btn-success btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Back</a>
+  </div>
+</header>
+
+<div class="d-flex gap-2 align-items-center mb-2 small">
+  <span class="legend-badge" style="background:#2563eb;color:#fff">Model</span>
+  <span class="legend-badge" style="background:#6b7280;color:#fff">Build</span>
+  <span class="legend-badge" style="background:#06b6d4;color:#fff">Objective</span>
+  <span class="legend-badge" style="background:#22c55e;color:#fff">KR</span>
+  <span class="legend-badge" style="background:#94a3b8;color:#fff">Task</span>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div id="gantt_here" class="gantt_container" style="width:100%;height:640px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
+<script>
+(function(){
+'use strict';
+if (gantt.plugins) gantt.plugins({ marker:true, tooltip:true, fullscreen:true });
+
+var gridRatio = 0.60, gridMin = 820;
+function gridWidth(){ return Math.max(gridMin, Math.floor(window.innerWidth*gridRatio)); }
+gantt.config.layout = {
+  css:"gantt_container",
+  rows:[
+    { cols:[
+        { view:"grid", scrollY:"scrollVer", width: gridWidth() },
+        { resizer:true, width:4 },
+        { view:"timeline", scrollX:"scrollHor", scrollY:"scrollVer" },
+        { view:"scrollbar", id:"scrollVer" }
+    ]},
+    { view:"scrollbar", id:"scrollHor", height:20 }
+  ]
+};
+
+gantt.config.row_height = 34;
+gantt.config.bar_height = 20;
+gantt.config.task_height = 26;
+
+(function(){
+  var today=new Date();
+  gantt.config.start_date=gantt.date.week_start(gantt.date.add(today,-1,"month"));
+  gantt.config.end_date=gantt.date.add(gantt.config.start_date,2,"month");
+})();
+
+gantt.config.readonly = true;
+gantt.config.drag_move = false;
+gantt.config.drag_resize = false;
+gantt.config.drag_progress = false;
+gantt.config.details_on_dblclick = false;
+
+function fmtQuarter(d){ return "Q"+(Math.floor(d.getMonth()/3)+1); }
+function fmtWeekNum(d){ return "W"+gantt.date.getWeek(d); }
+
+gantt.ext.zoom.init({levels:[
+  {name:"year", scale_height:40, min_column_width:60,
+   scales:[
+     {unit:"year", step:1, format:"%Y"},
+     {unit:"quarter", step:1, format:fmtQuarter}
+   ]},
+  {name:"month", scale_height:42, min_column_width:110,
+   scales:[
+     {unit:"month", step:1, format:"%F, %Y"},
+     {unit:"week", step:1, format:fmtWeekNum}
+   ]},
+  {name:"week", scale_height:42, min_column_width:80,
+   scales:[
+     {unit:"week", step:1, format:"W%W"},
+     {unit:"day", step:1, format:"%d (%D)"}
+   ]}
+]});
+gantt.ext.zoom.setLevel("month");
+
+gantt.config.grid_elastic_columns = true;
+gantt.config.columns = [
+  {name:"text",       label:"Build / Obj", tree:true, width:'*',  resize:true},
+  {name:"start_date", label:"Start",       align:"center", width:120, resize:true},
+  {name:"end_date",   label:"End",         align:"center", width:120, resize:true,
+   template:(t)=> t.end_date ? gantt.templates.date_grid(t.end_date) : ""},
+  {name:"owner",      label:"Assignee",    align:"center", width:120, resize:true, template:(t)=> t.owner || ""},
+  {name:"progress",   label:"Prog.",       align:"center", width:90,  resize:true, template:(t)=> Math.round((t.progress||0)*100) + "%"}
+];
+gantt.config.date_format="%Y-%m-%d";
+gantt.config.xml_date="%Y-%m-%d";
+gantt.config.fit_tasks = true;
+
+function inferType(t){
+  if(t.type) return t.type;
+  var id=String(t.id||"");
+  if((/(^|-)project/).test(id)) return "project";
+  if((/(^|-)build/).test(id)) return "build";
+  if((/(^|-)(obj|objective)/).test(id)) return "objective";
+  if((/(^|-)(kr|key)/).test(id)) return "key_result";
+  if((/(^|-)task/).test(id)) return "task";
+  var lvl=0,p=t.parent; while(p){ lvl++; var pt=gantt.getTask(p); p=pt?pt.parent:null; }
+  var arr=["project","build","objective","key_result","task"];
+  return arr[Math.min(lvl,4)];
+}
+var OKR_BASE="{{ url_for('main.okr_page', project_id=project_id, tab='details') }}";
+function linkFor(t,tp){
+  var type=tp||inferType(t);
+  var rid = (t.real_id!==undefined && t.real_id!==null) ? t.real_id : (String(t.id).match(/\\d+/)||[])[0] || t.id;
+  var qs=new URLSearchParams({tab:"details",focus_type:type,focus_id:String(rid)}).toString();
+  var glue = (OKR_BASE.indexOf("?")>-1) ? "&" : "?";
+  return OKR_BASE + glue + qs;
+}
+
+gantt.templates.timeline_cell_class=(task,date)=> ([0,6].includes(date.getDay()) ? "weekend" : "");
+gantt.templates.tooltip_text=function(start,end,t){
+  var fmt=gantt.templates.date_grid;
+  var ed=t.end_date?fmt(t.end_date):"";
+  var p=Math.round((t.progress||0)*100)+"%";
+  var safe=(t.text||"").replace(/\"/g,"&quot;");
+  return "<b title=\\""+safe+"\\">"+(t.text||"")+"</b>"
+       +"<br/>Start: "+fmt(t.start_date)+(ed?("<br/>End: "+ed):"")
+       +(t.owner?("<br/>Assignee: "+t.owner):"")
+       +"<br/>Progress: "+p;
+};
+gantt.templates.grid_text=(start,end,t)=>{
+  var tp=inferType(t);
+  var safe=(t.text||"").replace(/\"/g,"&quot;");
+  return "<a class=\\"grid-link lbl-"+tp+"\\" href=\\""+linkFor(t,tp)+"\\" title=\\""+safe+"\\">"+(t.text||"")+"</a>";
+};
+gantt.templates.task_class=(start,end,t)=>{
+  var tp=inferType(t);
+  var cls=["type-"+tp];
+  if((t.progress||0)>=1) cls.push("status_done");
+  return cls.join(" ");
+};
+gantt.templates.grid_row_class=(start,end,t)=> ( (t.progress||0)>=1 ? "status_done" : "" );
+
+gantt.init("gantt_here");
+if (gantt.addMarker) gantt.addMarker({ start_date:new Date(), css:"today", text:"Today", title:"Today" });
+
+window.addEventListener('resize', function(){
+  var lay=gantt.config.layout;
+  if(lay && lay.rows && lay.rows[0] && lay.rows[0].cols && lay.rows[0].cols[0]){
+    lay.rows[0].cols[0].width=gridWidth();
+    gantt.setSizes();
+  }
+});
+
+var FILTER_OWNER="", FILTER_SHOW_DONE=true, FILTER_QUERY="";
+gantt.attachEvent("onBeforeTaskDisplay", function(id, t){
+  if (FILTER_OWNER && (t.owner||"")!==FILTER_OWNER) return false;
+  if (!FILTER_SHOW_DONE && (t.progress||0)>=1) return false;
+  if (FILTER_QUERY && String(t.text||"").toLowerCase().indexOf(FILTER_QUERY)===-1) return false;
+  return true;
+});
+
+(function(){
+  window.GANTT_DATA = {{ gantt_data|tojson|safe if gantt_data is defined else 'null' }};
+  window.GANTT_DATA_URL = "{{ url_for('main.api_dhtmlx_data') }}{% if project_id %}?project_id={{ project_id }}{% endif %}";
+
+  function afterLoad(){
+    normalizeIds();
+    populateOwners();
+    clearViewWindow();
+    autoFitTreeColumn();
+    ensureView();
+  }
+
+  if (window.GANTT_DATA) { gantt.parse(window.GANTT_DATA); afterLoad(); }
+  else { gantt.load(window.GANTT_DATA_URL, "json", afterLoad); }
+
+  function normalizeIds(){ gantt.eachTask(function(t){ if(typeof t.real_id === "undefined") t.real_id=t.id; }); }
+  function populateOwners(){
+    var set={}, owners=[];
+    gantt.eachTask(function(t){ if(t.owner && !set[t.owner]){ set[t.owner]=1; owners.push(t.owner); } });
+    var sel=document.getElementById('ownerFilter');
+    for (var i=0;i<owners.length;i++){ var o=owners[i]; var op=document.createElement('option'); op.value=o; op.textContent=o; sel.appendChild(op); }
+  }
+  function clearViewWindow(){
+    try{ delete gantt.config.start_date; delete gantt.config.end_date; }catch(e){ gantt.config.start_date=null; gantt.config.end_date=null; }
+    gantt.render();
+  }
+  function ensureView(){
+    var tasks=gantt.getTaskByTime(gantt.config.start_date,gantt.config.end_date);
+    if(!tasks || !tasks.length){ gantt.ext.zoom.setLevel('month'); gantt.showDate(new Date()); }
+  }
+  function autoFitTreeColumn(){
+    var maxLen=0;
+    gantt.eachTask(function(t){ if(t.text){ maxLen=Math.max(maxLen, String(t.text).length); } });
+    var target=Math.max(320, Math.min(560, Math.round(maxLen*7 + 40)));
+    var cols=gantt.config.columns.slice(0);
+    cols[0] = Object.assign({}, cols[0], { width: target });
+    gantt.config.columns = cols;
+    var lay=gantt.config.layout;
+    if(lay && lay.rows && lay.rows[0] && lay.rows[0].cols && lay.rows[0].cols[0]){
+      lay.rows[0].cols[0].width=Math.max(gridMin, target+320);
+    }
+    gantt.render();
+  }
+})();
+
+document.getElementById('btnToday').onclick=function(){ gantt.showDate(new Date()); };
+document.getElementById('btnFit').onclick=function(){
+  gantt.render();
+  gantt.ext.zoom.setLevel("month");
+  gantt.showDate(new Date());
+};
+document.getElementById('ownerFilter').addEventListener('change',function(e){ FILTER_OWNER=e.target.value||""; gantt.refreshData(); });
+document.getElementById('toggleDone').addEventListener('change',function(e){ FILTER_SHOW_DONE=e.target.checked; gantt.refreshData(); });
+var si;
+document.getElementById('ganttSearch').addEventListener('input',function(e){
+  clearTimeout(si); si=setTimeout(function(){ FILTER_QUERY=(e.target.value||'').toLowerCase().trim(); gantt.refreshData(); }, 150);
+});
+
+})(); // IIFE end
+</script>
+{% endblock %}

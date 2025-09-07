@@ -32,6 +32,7 @@ def upload_init():
     filename = _safe_name(data.get("filename", "unnamed"))
     total_size = int(data.get("total_size") or 0)
     checksum = data.get("checksum")  # optional (md5/sha1 tự do, không ép)
+    project_id = data.get("project_id") # <-- Lấy project_id
 
     up_dir, tmp_dir = _ensure_dirs()
 
@@ -43,7 +44,8 @@ def upload_init():
         "filename": filename,
         "total_size": total_size,
         "received": 0,
-        "checksum": checksum
+        "checksum": checksum,
+        "project_id": project_id
     }
 
     with open(os.path.join(tmp_dir, f"{upload_id}.meta.json"), "w", encoding="utf-8") as f:
@@ -117,6 +119,7 @@ def upload_complete():
             meta = json.load(f)
         filename = _safe_name(meta["filename"])
         total_size = int(meta.get("total_size") or 0)
+        project_id = meta.get("project_id")
 
         # Đổi tên part => file đích
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -138,7 +141,9 @@ def upload_complete():
             saved_filename=saved_filename,
             file_type=(file_ext.lower() or ""),
             file_size=file_size,
-            uploader_id=current_user.id
+            uploader_id=current_user.id,
+            upload_source='direct',
+            project_id=project_id
         )
         db.session.add(new_file)
         db.session.commit()

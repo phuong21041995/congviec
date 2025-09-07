@@ -68,7 +68,17 @@
     </div>
   </div>
 </div>
-
+<div class="mb-2">
+  <label for="uploadProjectSelect" class="form-label small fw-bold">Gán vào Project (tùy chọn):</label>
+  <select id="uploadProjectSelect" class="form-select form-select-sm">
+    <option value="">-- Không gán --</option>
+    {% for project in all_projects %}
+    <option value="{{ project.id }}">{{ project.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+<div id="drop-zone" class="file-drop-zone p-3 border rounded text-center bg-light flex-grow-1 d-flex flex-column justify-content-center">
+    </div>
 
 <!-- Danh sách file -->
 <div class="card shadow-sm">
