@@ -52,6 +52,13 @@
                 </a>
             </li>
             <li class="nav-item mb-2">
+                <a class="nav-link text-white {% if page_name == 'practice_log' %}active{% endif %}"
+                   href="{{ url_for('main.practice_log_dashboard') }}"
+                   title="Quán Tâm" data-bs-toggle="tooltip" data-bs-placement="right">
+                    <i class="fa-solid fa-leaf"></i>
+                </a>
+            </li>
+            <li class="nav-item mb-2">
                 <a class="nav-link text-white {% if page_name == 'uploads_manager' %}active{% endif %}"
                    href="{{ url_for('main.uploads_manager') }}"
                    title="Upload file" data-bs-toggle="tooltip" data-bs-placement="right">
