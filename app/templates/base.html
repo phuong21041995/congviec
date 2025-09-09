@@ -30,6 +30,13 @@
                     <i class="fa-brands fa-product-hunt"></i>
                 </a>
             </li>
+			<li class="nav-item mb-2">
+				<a 	class="nav-link {% if page_name == 'global_timeline' %}active{% endif %}" 
+					href="{{ url_for('main.global_timeline') }}"
+					title="Timeline" data-bs-toggle="tooltip" data-bs-placement="right">
+					<i class="fa-solid fa-chart-gantt me-2"></i>
+				</a>
+			</li>		
             <li class="nav-item mb-2">
                 <a class="nav-link text-white {% if page_name == 'calendar' %}active{% endif %}"
                    href="{{ url_for('main.index') }}"
@@ -42,13 +49,6 @@
                    href="{{ url_for('main.kanban_board') }}"
                    title="Kanban" data-bs-toggle="tooltip" data-bs-placement="right">
                     <i class="fa-solid fa-table-columns"></i>
-                </a>
-            </li>
-            <li class="nav-item mb-2">
-                <a class="nav-link text-white {% if page_name == 'practice_log' %}active{% endif %}"
-                   href="{{ url_for('main.practice_log_dashboard') }}"
-                   title="Quán Tâm" data-bs-toggle="tooltip" data-bs-placement="right">
-                    <i class="fa-solid fa-leaf"></i>
                 </a>
             </li>
             <li class="nav-item mb-2">

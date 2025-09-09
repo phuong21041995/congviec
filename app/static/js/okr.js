@@ -1,5 +1,7 @@
+// static/js/okr.js
+
 // ============================================================================
-// OKR SCRIPT - PHIÊN BẢN SỬA LỖI CUỐI CÙNG
+// OKR SCRIPT - PHIÊN BẢN SỬA LỖI CUỐI CÙNG (VÀ NÂNG CẤP DROPDOWN)
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -20,6 +22,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const addKrForm = document.getElementById('addKrForm');
     const editKrForm = document.getElementById('editKrForm');
 
+    // MỚI: Lấy tham chiếu đến các dropdown Project và Build trong modal Objective
+    const projectSelect = objectiveForm?.querySelector('select[name="project_id"]');
+    const buildSelect = objectiveForm?.querySelector('select[name="build_id"]');
+
     // ========================================================
     // LOGIC CHO CÁC SỰ KIỆN CLICK VÀ SUBMIT
     // ========================================================
@@ -39,6 +45,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (currentProjectId && projectIdField) {
                 projectIdField.value = currentProjectId;
             }
+            
+            // MỚI: Gọi hàm cập nhật Build dropdown ngay khi mở modal
+            updateBuildsDropdown(); 
+
             objectiveModal.show();
         });
     }
@@ -149,7 +159,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const today = new Date().toISOString().split('T')[0];
             const currentUserId = document.querySelector('main.project-main')?.dataset.currentUserId || '';
             
-            // === SỬA LỖI CUỐI CÙNG: Đổi tên hàm thành openCreateModal ===
             if (window.openCreateModal) { 
                  window.openCreateModal({ 
                     key_result_id: krId, 
@@ -172,9 +181,63 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // MỚI: Lắng nghe sự kiện thay đổi của dropdown Project
+    if (projectSelect) {
+        projectSelect.addEventListener('change', () => {
+            // Khi project thay đổi, gọi hàm cập nhật Build nhưng không cần chọn trước build nào
+            updateBuildsDropdown(null);
+        });
+    }
+
     // ========================================================
     // CÁC HÀM HELPER
     // ========================================================
+    
+    // MỚI: Hàm để cập nhật danh sách Build dựa trên Project đã chọn
+    async function updateBuildsDropdown(selectedBuildId = null) {
+        if (!projectSelect || !buildSelect) return;
+
+        const projectId = projectSelect.value;
+        
+        // Xóa các lựa chọn cũ và vô hiệu hóa dropdown Build
+        buildSelect.innerHTML = '<option value="">-- Choose Build --</option>';
+        
+        if (!projectId) {
+            buildSelect.disabled = true;
+            return; // Nếu không có project nào được chọn, dừng lại
+        }
+
+        // Kích hoạt dropdown và hiển thị trạng thái đang tải
+        buildSelect.disabled = false;
+        buildSelect.querySelector('option').textContent = 'Loading builds...';
+
+        try {
+            const response = await fetch(`/api/builds/${projectId}`);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+
+            // Xóa trạng thái loading và cập nhật danh sách mới
+            buildSelect.innerHTML = '<option value="">-- Choose Build --</option>';
+            if (data.success && data.items) {
+                data.items.forEach(build => {
+                    // Tạo một <option> mới cho mỗi build
+                    const option = new Option(build.name, build.id);
+                    buildSelect.add(option);
+                });
+            }
+
+            // Nếu đang edit, tự động chọn lại build đã lưu
+            if (selectedBuildId) {
+                buildSelect.value = selectedBuildId;
+            }
+
+        } catch (error) {
+            console.error("Failed to fetch builds:", error);
+            showToast?.('Error', 'Could not load builds for the project.', 'danger');
+            buildSelect.innerHTML = '<option value="">-- Error loading builds --</option>';
+        }
+    }
+
 
     function openKrModal(objectiveId) {
         if (!addKrForm || !krModal) return;
@@ -216,7 +279,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 objectiveForm.querySelector('input[name="content"]').value = o.content;
                 objectiveForm.querySelector('select[name="owner_id"]').value = o.owner_id || '';
                 objectiveForm.querySelector('select[name="project_id"]').value = o.project_id || '';
-                objectiveForm.querySelector('select[name="build_id"]').value = o.build_id || '';
+                // SỬA: Thay vì gán cứng build_id, ta gọi hàm updateBuildsDropdown
+                // await sẽ đảm bảo danh sách build được tải xong trước khi gán giá trị
+                await updateBuildsDropdown(o.build_id || null);
+                
                 objectiveForm.querySelector('input[name="start_date_obj"]').value = o.start_date || '';
                 objectiveForm.querySelector('input[name="end_date_obj"]').value = o.end_date || '';
                 objectiveForm.querySelector('textarea[name="note"]').value = o.note || '';
@@ -229,4 +295,3 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 });
-

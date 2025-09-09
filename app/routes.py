@@ -2159,3 +2159,86 @@ def update_objective_order():
         db.session.rollback()
         current_app.logger.error(f"Error updating objective order: {e}")
         return jsonify({'success': False, 'message': 'An error occurred.'}), 500
+# Mở file: app/routes.py
+# Thêm 2 hàm sau vào cuối file
+
+@bp.route('/global-timeline')
+@login_required
+def global_timeline():
+    """Render trang Global Timeline mới."""
+    return render_template(
+        'global_timeline.html', 
+        page_name='global_timeline'
+    )
+
+# === VIS-TIMELINE ROADMAP ===
+@bp.route('/global-roadmap')
+@login_required
+def global_roadmap():
+    # Trang hiển thị roadmap (dùng vis-timeline)
+    return render_template('global_timeline.html', page_name='global_roadmap')
+
+
+# Mở file: app/routes.py
+
+@bp.route('/vis-roadmap-data')
+@login_required
+def vis_roadmap_data():
+    """
+    API cung cấp dữ liệu cho vis-timeline.
+    Tạo sẵn HTML với inline style để đảm bảo giao diện chính xác.
+    """
+    def add_days(d, days): return (d + timedelta(days=days)) if d else None
+    def f_md(d): return d.strftime("%#m/%#d") if d else ""
+
+    def phase_class(name: str) -> str:
+        if not name: return ""
+        n = name.lower().strip()
+        if n.startswith("p1"): return "phase-p1"
+        if n.startswith("p2"): return "phase-p2"
+        if n.startswith("e1"): return "phase-e1"
+        if n.startswith("e2"): return "phase-e2"
+        if n.startswith("d1"): return "phase-d1"
+        if "pvt" in n: return "phase-pvt"
+        return "phase-poc" # Mặc định cho POC, C1, C2...
+
+    projects = Project.query.options(
+        subqueryload(Project.builds)
+    ).order_by(Project.name).all()
+
+    groups, items = [], []
+
+    for p in projects:
+        builds = [b for b in p.builds if b.start_date and b.end_date]
+        if not builds:
+            continue
+
+        groups.append({"id": p.id, "content": p.name or f"Project {p.id}"})
+
+        for b in sorted(builds, key=lambda x: x.start_date):
+            label = (b.name or "Build").strip()
+            start_s, end_s = f_md(b.start_date), f_md(b.end_date)
+
+            # === TẠO HTML VỚI INLINE STYLE TẠI ĐÂY ===
+            label_style = "font-weight:700; font-size:16px; line-height:1.3; color:var(--text-color);"
+            date_style = "font-size:12px; line-height:1.2; color:var(--date-color); font-weight:400; opacity:0.8;"
+
+            content_html = (
+                f"<div style='{label_style}'>{label}</div>"
+                f"<div style='{date_style}'>{start_s} → {end_s}</div>"
+            )
+            # ==========================================
+
+            items.append({
+                "id": f"build-{b.id}",
+                "group": p.id,
+                "content": content_html,
+                "start": b.start_date.isoformat(),
+                "end": add_days(b.end_date, 1).isoformat(),
+                "className": f"phase {phase_class(b.name)}",
+                "title": f"{p.name} • {label} • {b.start_date} → {b.end_date}",
+                "project_id": p.id,
+            })
+
+    return jsonify({"success": True, "groups": groups, "items": items})
+

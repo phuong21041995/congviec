@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Global Roadmap{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/vis/vis-timeline-graph2d.min.css') }}">
+<style>
+  /* Khu vực tùy chỉnh giao diện */
+  .vis-time-axis.vis-foreground { height: 70px !important; }
+  .vis-item.phase { height: 60px; }
+  .vis-labelset .vis-label { width: 80px !important; }
+
+  /* Các style chi tiết khác */
+  #timeline-wrapper { display: flex; flex-direction: column; height: 80vh; }
+  #timeline-filters { padding-bottom: 1rem; display: flex; align-items: center; gap: 1rem; }
+  #timeline-filters .list-group { display: flex; flex-direction: row; gap: 0.5rem; }
+  #timeline-filters .list-group-item {
+    padding: .375rem .75rem; border-radius: .375rem; cursor: pointer;
+    border: 1px solid #dee2e6; background-color: #fff; transition: all 0.2s ease-in-out;
+  }
+  #timeline-filters .list-group-item.active {
+    background-color: #0d6efd; color: white; border-color: #0d6efd;
+  }
+  #timeline { width: 100%; flex-grow: 1; border: 1px solid #dee2e6; border-radius: .5rem; }
+  
+  .vis-labelset .vis-label {
+      font-weight: 700; font-size: 16px; color: #343a40;
+      display: flex; align-items: center; padding-left: 1.5rem;
+  }
+  .vis-time-axis .vis-text.vis-major { font-size: 18px; font-weight: bold; }
+  .vis-time-axis .vis-text.vis-minor { font-size: 14px; }
+
+  .vis-item.phase { border: none !important; background-color: transparent; box-shadow: none; }
+  
+  .vis-item.phase .vis-item-content {
+    width: 100%; height: 100%;
+    background-color: var(--phase-color, #ccc);
+    clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%, 15px 50%);
+    display: flex; flex-direction: column;
+    justify-content: center;
+    padding: 4px 25px 4px 25px;
+  }
+
+  .vis-item .phase-label { font-weight: 700; font-size: 16px; line-height: 1.3; color: var(--text-color); }
+  .vis-item .phase-dates { font-size: 12px; line-height: 1.2; color: var(--date-color); font-weight: 400; opacity: 0.8; }
+
+  /* Bảng màu */
+  .phase-p1  { --phase-color:#f8d7da; --text-color:#58151c; --date-color:#7c5431; }
+  .phase-p2  { --phase-color:#d1ecf1; --text-color:#0c5460; --date-color:#2a7886; }
+  .phase-e1  { --phase-color:#d4edda; --text-color:#155724; --date-color:#2b7a4b; }
+  .phase-e2  { --phase-color:#cdeec9; --text-color:#155724; --date-color:#2b7a4b; }
+  .phase-d1  { --phase-color:#e2d9f3; --text-color:#493267; --date-color:#5b4573; }
+  .phase-pvt { --phase-color:#28a745; --text-color:white;   --date-color:#e0ffe0; }
+  .phase-poc, .phase-c1, .phase-c2, .phase-c3 { 
+    --phase-color:#dae0e5; --text-color:#383d41; --date-color:#5a6268;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">Global Model Roadmap</h2>
+    <div class="btn-group" role="group">
+      <button id="zoomOutBtn" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+      <button id="zoomInBtn"  class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+      <button id="todayBtn"   class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-calendar-day"></i> Today</button>
+      <button id="fitBtn"     class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-expand"></i> Fit</button>
+    </div>
+  </div>
+  <div id="timeline-wrapper">
+      <div id="timeline-filters">
+        <strong>Models:</strong>
+        <div id="model-filter-buttons" class="list-group"></div>
+      </div>
+      <div id="timeline"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+<script src="{{ url_for('static', filename='vendor/vis/vis-timeline-graph2d.min.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const container = document.getElementById('timeline');
+  const filterContainer = document.getElementById('model-filter-buttons');
+
+  let payload = {success:false, groups:[], items:[]};
+  try {
+    const resp = await fetch('{{ url_for("main.vis_roadmap_data") }}');
+    if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
+    payload = await resp.json();
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-danger">Failed to load roadmap data: ${e.message}</div>`;
+    return;
+  }
+  if (!payload.success || !payload.items || !payload.items.length === 0) {
+    container.innerHTML = `<div class="alert alert-warning">No roadmap data available.</div>`;
+    return;
+  }
+
+  const groups = new vis.DataSet(payload.groups || []);
+  const items  = new vis.DataSet(payload.items  || []);
+  
+  const options = {
+    stack: false, 
+    moment: (date) => vis.moment(date).utc(),
+    margin: { item: { horizontal: 0 } },
+    //template: (item) => `<div class='phase-label'>${item.content}</div><div class='phase-dates'>${item.start_str} – ${item.end_str}</div>`,
+    orientation: { axis: 'top' },
+    showCurrentTime: true,
+    selectable: false, moveable: false, zoomable: true,
+    timeAxis: { scale: 'month', step: 1 },
+    format: { minorLabels: { month: 'MMM' }, majorLabels: { year: 'YYYY' } },
+  };
+
+  const timeline = new vis.Timeline(container, items, groups, options);
+  
+  // === HÀM FIT ĐÃ ĐƯỢC VIẾT LẠI HOÀN TOÀN ===
+  const fitTimelineToData = () => {
+      // 1. Lấy ID của các model đang được chọn từ nút lọc
+      const visibleGroupIds = Array.from(document.querySelectorAll('#model-filter-buttons button.active[data-group-id]'))
+                                   .map(b => parseInt(b.dataset.groupId));
+
+      // Nếu không có model nào được chọn, không làm gì cả
+      if (visibleGroupIds.length === 0) {
+          timeline.setWindow(new Date(2025, 0, 1), new Date(2026, 11, 31)); // Hiển thị khung mặc định
+          return;
+      }
+      
+      // 2. Lấy tất cả các build thuộc các model đang hiển thị
+      const itemsToFit = items.get({
+          filter: item => visibleGroupIds.includes(item.group)
+      });
+
+      if (itemsToFit.length === 0) return;
+
+      // 3. Tìm ngày min/max trong các build này
+      let minDate = null;
+      let maxDate = null;
+      itemsToFit.forEach(item => {
+          const start = new Date(item.start);
+          const end = new Date(item.end);
+          if (!minDate || start < minDate) minDate = start;
+          if (!maxDate || end > maxDate) maxDate = end;
+      });
+
+      // 4. Thêm padding và set window
+      const startWindow = new Date(minDate.setDate(minDate.getDate() - 30));
+      const endWindow = new Date(maxDate.setDate(maxDate.getDate() + 30));
+      timeline.setWindow(startWindow, endWindow, { animation: true });
+  };
+  
+  // --- BỘ LỌC MODEL ---
+  const applyFilter = () => {
+      const visibleGroupIds = Array.from(document.querySelectorAll('#model-filter-buttons button.active[data-group-id]'))
+                                   .map(b => parseInt(b.dataset.groupId));
+      
+      // Chỉ cần lọc group, timeline sẽ tự ẩn item tương ứng
+      timeline.setGroups(groups.get({ filter: g => visibleGroupIds.includes(g.id) }));
+      
+      const allIsActive = visibleGroupIds.length === allGroupIds.length;
+      document.querySelector('#model-filter-buttons button.all-btn').classList.toggle('active', allIsActive);
+      
+      // Gọi hàm fit mới sau khi lọc
+      setTimeout(fitTimelineToData, 50); 
+  };
+
+  const allButton = document.createElement('button');
+  allButton.className = 'list-group-item active all-btn';
+  allButton.textContent = 'All';
+  allButton.onclick = () => {
+      document.querySelectorAll('#model-filter-buttons button').forEach(b => b.classList.add('active'));
+      applyFilter();
+  };
+  filterContainer.appendChild(allButton);
+
+  groups.forEach(group => {
+      const button = document.createElement('button');
+      button.className = 'list-group-item active';
+      button.textContent = group.content;
+      button.dataset.groupId = group.id;
+      button.onclick = () => {
+          button.classList.toggle('active');
+          applyFilter();
+      };
+      filterContainer.appendChild(button);
+  });
+
+  setTimeout(fitTimelineToData, 200);
+  
+  document.getElementById('zoomInBtn').onclick  = () => timeline.zoomIn(0.5);
+  document.getElementById('zoomOutBtn').onclick = () => timeline.zoomOut(0.5);
+  document.getElementById('fitBtn').onclick     = () => fitTimelineToData();
+  document.getElementById('todayBtn').onclick   = () => timeline.moveTo(new Date());
+
+  timeline.on('click', props => {
+    const item = items.get(props.item);
+    if(item && item.project_id) {
+      window.location.href = `{{ url_for('main.project_workspace') }}?project_id=${item.project_id}`;
+    }
+  });
+});
+</script>
+{% endblock %}
