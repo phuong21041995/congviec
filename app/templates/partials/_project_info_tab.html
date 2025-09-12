@@ -2,7 +2,6 @@
 {% set stats = p_data.stats %}
 {% set days_remaining = p_data.days_remaining %}
 
-<!-- Row 1: Key Metric Cards -->
 <div class="row g-3 mb-4">
     <div class="col-md-6 col-lg-3">
         <div class="card h-100 shadow-sm">
@@ -60,49 +59,64 @@
 </div>
 
 <div class="row g-4">
-    <!-- Column 1: Builds & Description -->
-    <div class="col-lg-7">
-        <h5 class="mb-3">Builds</h5>
-        <div class="d-flex flex-column gap-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="m-0">Builds</h5>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#activityOffcanvas" aria-controls="activityOffcanvas">
+                <i class="fa-solid fa-timeline me-1"></i> Recent Activity
+            </button>
+        </div>
+
+        <div class="row g-3">
             {% for build in p.builds %}
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title mb-1">{{ build.name }}</h6>
-                            {% if build.start_date and build.end_date %}
-                            <small class="text-muted">{{ build.start_date.strftime('%b %d') }} - {{ build.end_date.strftime('%b %d, %Y') }}</small>
-                            {% endif %}
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="card-title mb-1">{{ build.name }}</h6>
+                                {% if build.start_date and build.end_date %}
+                                <small class="text-muted">{{ build.start_date.strftime('%b %d, %Y') }} - {{ build.end_date.strftime('%b %d, %Y') }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="btn-group">
+                                {% if build.schedule_link %}
+                                    <a href="{{ build.schedule_link }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Schedule"><i class="fa-solid fa-calendar-week"></i></a>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-secondary btn-edit-build" data-build-id="{{ build.id }}"><i class="fa-solid fa-pen"></i></button>
+                            </div>
                         </div>
-                        <div class="btn-group">
-                            {% if build.schedule_link %}
-                                <a href="{{ build.schedule_link }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Schedule"><i class="fa-solid fa-calendar-week"></i></a>
-                            {% endif %}
-                            <button class="btn btn-sm btn-outline-secondary btn-edit-build" data-build-id="{{ build.id }}"><i class="fa-solid fa-pen"></i></button>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ build.progress }}%;" 
+                                     aria-valuenow="{{ build.progress }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                            <small class="fw-bold text-muted">{{ build.progress|round }}%</small>
                         </div>
                     </div>
-					<div class="d-flex align-items-center mt-2">
-						<div class="progress flex-grow-1 me-2" style="height: 8px;">
-							<div class="progress-bar" role="progressbar" 
-								 style="width: {{ build.progress }}%;" 
-								 aria-valuenow="{{ build.progress }}" 
-								 aria-valuemin="0" aria-valuemax="100">
-							</div>
-						</div>
-						<small class="fw-bold text-muted">{{ build.progress }}%</small>
-					</div>
-					</div>
-			</div>                
+                </div>
+            </div>
             {% else %}
-            <div class="card card-body text-center text-muted">No builds for this project.</div>
+            <div class="col-12">
+                <div class="card card-body text-center text-muted">No builds for this project.</div>
+            </div>
             {% endfor %}
         </div>
+
         <h5 class="mt-4 mb-3">Description</h5>
         <p class="text-muted small">{{ p.description or 'No description provided.' }}</p>
     </div>
-    <!-- Column 2: Recent Activity -->
-    <div class="col-lg-5">
-        <h5 class="mb-3">Recent Activity</h5>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="activityOffcanvas" aria-labelledby="activityOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="activityOffcanvasLabel">Recent Activity</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
         <ul class="list-group list-group-flush">
             {% for log in p_data.logs %}
             <li class="list-group-item px-0">
