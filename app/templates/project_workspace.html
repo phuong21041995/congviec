@@ -110,7 +110,7 @@
 <div class="workspace-layout">
   <main class="project-main">    
     {% if selected_project_data %}
-<div class="d-flex align-items-center gap-4 px-3 py-2 border-bottom bg-body-tertiary rounded-top mb-4">
+    <div class="d-flex align-items-center gap-4 px-3 py-2 border-bottom bg-body-tertiary rounded-top mb-4 mt-0">
         <h4 class="m-0 text-primary fw-bold text-nowrap">{{ selected_project_data.project.name }}</h4>
         
         <ul class="nav nav-pills" id="projectTab" role="tablist">
@@ -125,7 +125,10 @@
           </li>
         </ul>
 
-        <div class="ms-auto">
+        <div class="ms-auto d-flex align-items-center">
+          <a href="{{ url_for('main.global_timeline') }}" class="btn btn-sm btn-outline-secondary me-2">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back to Timeline
+          </a>
           <button class="btn btn-sm btn-outline-dark btn-edit-project" data-project-id="{{ selected_project_data.project.id }}">
             <i class="fa-solid fa-pen me-1"></i>Edit
           </button>
@@ -195,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function(){
             applySidebarState(isCollapsed);
         });
     }
-    // Logic cho các nút edit vẫn được giữ lại để có thể dùng ở nơi khác (ví dụ: nút edit trong tab info)
+
     document.body.addEventListener('click', async function(event) {
         const editProjectBtn = event.target.closest('.btn-edit-project');
         if (editProjectBtn) {
@@ -203,8 +206,13 @@ document.addEventListener('DOMContentLoaded', function(){
             const response = await fetch(`/api/project/${currentProjectId}`);
             if (!response.ok) return;
             const data = await response.json();
-            const form = document.getElementById('editProjectForm');
-            form.action = `/update-project/${currentProjectId}`;
+            
+            const editForm = document.getElementById('editProjectForm');
+            const deleteForm = document.getElementById('deleteProjectForm');
+            
+            editForm.action = `/update-project/${currentProjectId}`;
+            deleteForm.action = `/delete-project/${currentProjectId}`;
+
             document.getElementById('editProjectName').value = data.name || '';
             document.getElementById('editProjectDescription').value = data.description || '';
             document.getElementById('editProjectStartDate').value = data.start_date || '';
@@ -215,14 +223,20 @@ document.addEventListener('DOMContentLoaded', function(){
 
             new bootstrap.Modal(document.getElementById('editProjectModal')).show();
         }
+        
         const editBuildBtn = event.target.closest('.btn-edit-build');
         if (editBuildBtn) {
             const buildId = editBuildBtn.dataset.buildId;
             const response = await fetch(`/api/build/${buildId}`);
             if (!response.ok) return;
             const data = await response.json();
-            const form = document.getElementById('editBuildForm');
-            form.action = `/update-build/${buildId}`;
+
+            const editForm = document.getElementById('editBuildForm');
+            const deleteForm = document.getElementById('deleteBuildForm');
+
+            editForm.action = `/update-build/${buildId}`;
+            deleteForm.action = `/delete-build/${buildId}`;
+            
             document.getElementById('editBuildName').value = data.name || '';
             document.getElementById('editBuildProject').value = data.project_id || '';
             document.getElementById('editBuildStartDate').value = data.start_date || '';
@@ -234,6 +248,7 @@ document.addEventListener('DOMContentLoaded', function(){
             new bootstrap.Modal(document.getElementById('editBuildModal')).show();
         }
     });
+
     if (activeTab === 'okr') {
         const okrContent = document.getElementById('okr-tab-content');
 		if (okrContent) {
@@ -323,7 +338,84 @@ document.addEventListener('DOMContentLoaded', function(){
             });
         }
     }
+
 	if (activeTab === 'timeline' && projectId) {
+        // =================================================================
+        // ===== BẮT ĐẦU ĐOẠN CODE MỚI ĐỂ LƯU TRẠNG THÁI TIMELINE =========
+        // =================================================================
+        
+        // Hàm debounce để tránh gọi một hàm liên tục, tối ưu hiệu năng
+        const debounce = (func, delay) => {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        };
+        
+        const ganttStateKey = `gantt_workspace_state_${projectId}`;
+
+        // Hàm lưu trạng thái hiện tại của Gantt chart vào localStorage
+        const saveGanttState = () => {
+            const typeFilter = document.getElementById('ganttTypeFilter');
+            const activeTypeButtons = typeFilter ? Array.from(typeFilter.querySelectorAll('button.active')).map(b => b.dataset.type) : [];
+
+            const state = {
+                zoom: gantt.ext.zoom.getLevel(),
+                scroll: gantt.getScrollState(),
+                filters: {
+                    owner: document.getElementById('ownerFilter')?.value || "",
+                    showDone: document.getElementById('toggleDone')?.checked,
+                    search: document.getElementById('ganttSearch')?.value || "",
+                    types: activeTypeButtons
+                }
+            };
+            localStorage.setItem(ganttStateKey, JSON.stringify(state));
+        };
+        
+        // Hàm đọc và áp dụng trạng thái đã lưu
+        const loadGanttState = () => {
+            const savedStateJSON = localStorage.getItem(ganttStateKey);
+            if (!savedStateJSON) return null;
+            try {
+                const state = JSON.parse(savedStateJSON);
+                
+                // Áp dụng mức zoom
+                gantt.ext.zoom.setLevel(state.zoom);
+                
+                // Áp dụng giá trị cho các bộ lọc
+                const ownerFilter = document.getElementById('ownerFilter');
+                if(ownerFilter) ownerFilter.value = state.filters.owner;
+                
+                const toggleDone = document.getElementById('toggleDone');
+                if(toggleDone) toggleDone.checked = state.filters.showDone;
+                
+                const ganttSearch = document.getElementById('ganttSearch');
+                if(ganttSearch) ganttSearch.value = state.filters.search;
+
+                // Áp dụng bộ lọc loại item
+                const typeFilter = document.getElementById('ganttTypeFilter');
+                if (typeFilter && state.filters.types) {
+                    typeFilter.querySelectorAll('button[data-type]').forEach(btn => {
+                        btn.classList.toggle('active', state.filters.types.includes(btn.dataset.type));
+                    });
+                }
+
+                return state; // Trả về state để có thể dùng vị trí cuộn sau
+            } catch (e) {
+                console.error("Failed to load Gantt state:", e);
+                return null;
+            }
+        };
+
+        // Hàm lưu trạng thái có debounce để tối ưu
+        const debouncedSaveState = debounce(saveGanttState, 500);
+
+        // =================================================================
+        // ===== KẾT THÚC ĐOẠN CODE MỚI ====================================
+        // =================================================================
+        
         if (gantt.plugins) {
 			gantt.plugins({ marker: true, tooltip: true });
 		}
@@ -354,40 +446,33 @@ document.addEventListener('DOMContentLoaded', function(){
 		
 		gantt.ext.zoom.init({
 			levels: [
-				{ name: "year", scale_height: 75, scales: [
-                    { unit: "year", step: 1, format: "%Y" },
-                    { unit: "quarter", step: 1, format: date => {
-                        const month = date.getMonth();
-                        if (month < 3) return "Q1";
-                        if (month < 6) return "Q2";
-                        if (month < 9) return "Q3";
-                        return "Q4";
-                    }},
-                    { unit: "month", step: 1, format: "%M" }
-                ]},
-				{ name: "month", scale_height: 75, scales: [
-                    { unit: "year", step: 1, format: "%Y" },
-                    { unit: "month", step: 1, format: "%F" }, 
-                    { unit: "week", step: 1, format: d => "W" + gantt.date.getWeek(d) }
-                ]},
-				{ name: "week", scale_height: 90, scales: [
-                    { unit: "year", step: 1, format: "%Y" },
-                    { unit: "week", step: 1, format: d => "W" + gantt.date.getWeek(d) },
-                    { unit: "day", step: 1, format: "%D" },
-                    { unit: "day", step: 1, format: "%d" }
-                ]}
+				{ name: "year", scale_height: 75, scales: [ { unit: "year", step: 1, format: "%Y" }, { unit: "quarter", step: 1, format: date => "Q" + (Math.floor(date.getMonth() / 3) + 1)}, { unit: "month", step: 1, format: "%M" } ]},
+				{ name: "month", scale_height: 75, scales: [ { unit: "year", step: 1, format: "%Y" }, { unit: "month", step: 1, format: "%F" }, { unit: "week", step: 1, format: d => "W" + gantt.date.getWeek(d) } ]},
+				{ name: "week", scale_height: 90, scales: [ { unit: "year", step: 1, format: "%Y" }, { unit: "week", step: 1, format: d => "W" + gantt.date.getWeek(d) }, { unit: "day", step: 1, format: "%D" }, { unit: "day", step: 1, format: "%d" } ]}
 			]
 		});
-		gantt.ext.zoom.setLevel("week");
+		
+        // Tải trạng thái trước khi init
+        const restoredState = loadGanttState();
+        
 		gantt.templates.task_class = (s, e, t) => `type-${t.type} ${ (t.progress||0) >= 1 ? 'status_done' : '' }`;
 		gantt.templates.tooltip_text = (s, e, t) => `<b>${t.text}</b><br/>Progress: ${Math.round((t.progress||0)*100)}%`;
 		
         gantt.attachEvent("onGanttReady", function () {
             const legend = document.querySelector(".timeline-legend");
             if(legend) legend.style.display = "flex";
+            // Khôi phục vị trí cuộn sau khi gantt đã sẵn sàng
+            if (restoredState && restoredState.scroll) {
+                gantt.scrollTo(restoredState.scroll.x, restoredState.scroll.y);
+            }
         });
 		gantt.init("gantt_here");
 		gantt.addMarker({ start_date: new Date(), css: "today", text: "Today" });
+
+        // Gắn sự kiện để lưu trạng thái
+        gantt.attachEvent("onAfterZoom", debouncedSaveState);
+        gantt.attachEvent("onGanttScroll", debouncedSaveState);
+        
 		gantt.attachEvent("onTaskClick", function(id, e) {
 			if (e.target.closest(".gantt_tree_icon")) return true;
 			const task = gantt.getTask(id);
@@ -399,8 +484,12 @@ document.addEventListener('DOMContentLoaded', function(){
 			}
 			return true;
 		});
-		let ownerFilterValue = "", showDone = true, searchQuery = "";
-		let visibleTypes = new Set(["project", "build", "objective", "key_result", "task"]); 
+
+		let ownerFilterValue = document.getElementById('ownerFilter')?.value || "";
+        let showDone = document.getElementById('toggleDone')?.checked ?? true;
+        let searchQuery = document.getElementById('ganttSearch')?.value || "";
+        let visibleTypes; // Sẽ được khởi tạo bên dưới
+
 		gantt.attachEvent("onBeforeTaskDisplay", (id, t) => {
 			if (!visibleTypes.has(t.type)) return false; 
 			if (ownerFilterValue && (t.owner || "") !== ownerFilterValue) return false;
@@ -411,12 +500,18 @@ document.addEventListener('DOMContentLoaded', function(){
         const toolbar = document.querySelector("#projectTabContent .tab-pane.active header");
 		document.getElementById('btnToday')?.addEventListener('click', () => gantt.showDate(new Date()));
         document.getElementById('btnFit')?.addEventListener('click', () => {gantt.config.fit_tasks = true; gantt.render();});
-		document.getElementById('ownerFilter')?.addEventListener('change', e => { ownerFilterValue = e.target.value || ""; gantt.refreshData(); });
-		document.getElementById('toggleDone')?.addEventListener('change', e => { showDone = e.target.checked; gantt.refreshData(); });
-		let searchTimeout; 
-        document.getElementById('ganttSearch')?.addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { searchQuery = (e.target.value || '').toLowerCase().trim(); gantt.refreshData(); }, 300); });
-		const typeFilter = document.getElementById('ganttTypeFilter');
+		
+        document.getElementById('ownerFilter')?.addEventListener('change', e => { ownerFilterValue = e.target.value || ""; gantt.refreshData(); debouncedSaveState(); });
+		document.getElementById('toggleDone')?.addEventListener('change', e => { showDone = e.target.checked; gantt.refreshData(); debouncedSaveState(); });
+		document.getElementById('ganttSearch')?.addEventListener('input', e => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { searchQuery = (e.target.value || '').toLowerCase().trim(); gantt.refreshData(); debouncedSaveState(); }, 300); });
+		
+        const typeFilter = document.getElementById('ganttTypeFilter');
 		if (typeFilter) {
+            // Khởi tạo visibleTypes dựa trên các nút active (đã được loadState() xử lý)
+            visibleTypes = new Set(Array.from(typeFilter.querySelectorAll('button.active[data-type]')).map(b => b.dataset.type));
+            // Bỏ 'all' ra khỏi set nếu có
+            visibleTypes.delete('all');
+            
 			typeFilter.addEventListener('click', (e) => {
 				const button = e.target.closest('button');
 				if (!button) return;
@@ -444,17 +539,24 @@ document.addEventListener('DOMContentLoaded', function(){
 					typeFilter.querySelector('button[data-type="all"]').classList.toggle('active', allActive);
 				}
 				gantt.refreshData();
+                debouncedSaveState();
 			});
-		}        
+		} else {
+            visibleTypes = new Set(["project", "build", "objective", "key_result", "task"]);
+        }
+
 		const zoomButtons = toolbar.querySelector(".btn-group[role='group']");
         if(zoomButtons) { zoomButtons.addEventListener('click', e => { if(e.target.tagName !== 'BUTTON') return; const level = e.target.textContent.toLowerCase(); if (['year','month','week'].includes(level)) gantt.ext.zoom.setLevel(level); if (e.target.textContent === '+') gantt.ext.zoom.zoomIn(); if (e.target.textContent === '-') gantt.ext.zoom.zoomOut(); }); }
-		gantt.load(`/api/dhtmlx-data?project_id=${projectId}`).then(() => {
+		
+        gantt.load(`/api/dhtmlx-data?project_id=${projectId}`).then(() => {
             const owners = new Set();
 			gantt.eachTask(t => { if (t.owner) owners.add(t.owner); });
             const ownerSelect = document.getElementById('ownerFilter');
 			if (ownerSelect) {
+                const currentVal = ownerSelect.value; // Lưu lại giá trị đã được loadState() set
                 ownerSelect.innerHTML = '<option value="">All assignees</option>'; 
                 owners.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; ownerSelect.appendChild(opt); });
+                ownerSelect.value = currentVal; // Khôi phục lại giá trị
             }
             gantt.render();
         });
@@ -462,3 +564,4 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 {% endblock %}
+
