@@ -20,7 +20,7 @@ from app.models import (KeyResult, Log,
                         Objective, Project, Task, UploadedFile, User, Column, Note, PracticeLog, Build)
 from app.constants import STATUS_META, TASK_STATUSES
 from app.utils import get_date_range, get_time_range_from_filter, _vn_day_bounds_to_utc, to_vn_time, to_utc_time
-
+from sqlalchemy import select
 
 bp = Blueprint('main', __name__)
 
@@ -2159,18 +2159,29 @@ def update_objective_order():
         db.session.rollback()
         current_app.logger.error(f"Error updating objective order: {e}")
         return jsonify({'success': False, 'message': 'An error occurred.'}), 500
-# Mở file: app/routes.py
-# Thêm 2 hàm sau vào cuối file
+
 
 @bp.route('/global-timeline')
 @login_required
 def global_timeline():
     """Render trang Global Timeline mới."""
+    # THÊM CODE LẤY DỮ LIỆU TỪ DATABASE
+    users = db.session.scalars(select(User).order_by(User.username)).all()
+    projects = db.session.scalars(select(Project).order_by(Project.name)).all()
+    status_choices = ['Planned', 'Active', 'On Hold', 'Done']
+    builds = db.session.scalars(select(Build).order_by(Build.name)).all()
+
+    # GỬI DỮ LIỆU SANG TEMPLATE
     return render_template(
         'global_timeline.html', 
-        page_name='global_timeline'
+        page_name='global_timeline',
+        users=users,
+        projects=projects,
+        status_choices=status_choices,
+        builds=builds,
+        # Thêm selected_project_id=None để modal không báo lỗi
+        selected_project_id=None 
     )
-
 # === VIS-TIMELINE ROADMAP ===
 @bp.route('/global-roadmap')
 @login_required
