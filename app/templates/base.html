@@ -23,13 +23,6 @@
     <!-- Sidebar -->
     <nav class="sidebar bg-dark text-white p-3 d-flex flex-column">
         <ul class="nav nav-pills flex-column mb-auto">
-            <li class="nav-item mb-2">
-                <a class="nav-link text-white {% if page_name == 'projects' %}active{% endif %}"
-                   href="{{ url_for('main.project_workspace') }}"
-                   title="Project" data-bs-toggle="tooltip" data-bs-placement="right">
-                    <i class="fa-brands fa-product-hunt"></i>
-                </a>
-            </li>
 			<li class="nav-item mb-2">
 				<a 	class="nav-link {% if page_name == 'global_timeline' %}active{% endif %}" 
 					href="{{ url_for('main.global_timeline') }}"
