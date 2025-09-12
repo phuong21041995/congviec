@@ -100,6 +100,7 @@ class Project(db.Model):
     owner = db.relationship('User', backref='projects_owned')
     objectives = db.relationship('Objective', backref='project', cascade="all, delete-orphan")
     builds = db.relationship('Build', backref='project', lazy=True, cascade="all, delete-orphan")
+    position = db.Column(db.Integer, nullable=False, default=0, server_default='0')
 
     @property
     def progress(self):
