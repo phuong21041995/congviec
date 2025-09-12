@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Global Roadmap — Drag + Filter + Fit{% endblock %}
+{% block title %}Project Status{% endblock %}
 
 {% block styles %}
 {{ super() }}
@@ -55,9 +55,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-0">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-    <h2 class="m-0">Global Model Roadmap</h2>
+    <h2 class="m-0">Models Status</h2>
     <div class="d-flex align-items-center gap-2" role="group">
         <div class="btn-group" role="group">
             <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addProjectModal"><i class="fa-solid fa-plus me-2"></i>New Project</button>
@@ -106,6 +106,50 @@
 // Drag + Filter + TRUE FIT + PERSIST FILTER (lưu trạng thái cuối cùng)
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // =================================================================
+  // ===== BẮT ĐẦU ĐOẠN CODE SỬA LỖI CHO NÚT DELETE ===================
+  // =================================================================
+  
+  // 1. Sửa lỗi cho Modal "Edit Project"
+  const editProjectModal = document.getElementById('editProjectModal');
+  if (editProjectModal) {
+      const deleteProjectForm = document.getElementById('deleteProjectForm');
+      const editProjectForm = document.getElementById('editProjectForm');
+
+      editProjectModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const projectId = button.getAttribute('data-id');
+
+          if (projectId) {
+              // Cập nhật action cho cả form Edit và form Delete
+              editProjectForm.action = `/update-project/${projectId}`;
+              deleteProjectForm.action = `/delete-project/${projectId}`;
+          }
+      });
+  }
+
+  // 2. Sửa lỗi cho Modal "Edit Build"
+  const editBuildModal = document.getElementById('editBuildModal');
+  if (editBuildModal) {
+      const deleteBuildForm = document.getElementById('deleteBuildForm');
+      const editBuildForm = document.getElementById('editBuildForm');
+
+      editBuildModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const buildId = button.getAttribute('data-id'); 
+
+          if (buildId) {
+            // Cập nhật action cho cả form Edit và form Delete
+            editBuildForm.action = `/update-build/${buildId}`;
+            deleteBuildForm.action = `/delete-build/${buildId}`;
+          }
+      });
+  }
+
+  // =================================================================
+  // ===== KẾT THÚC ĐOẠN CODE SỬA LỖI ================================
+  // =================================================================
+
   const container = document.getElementById('timeline');
   const filterContainer = document.getElementById('model-filter-buttons');
   const LS_ORDER_KEY  = 'roadmapProjectOrder';
@@ -154,9 +198,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- Create item content based on showDates state ---
   const createItemContent = (itemData) => {
     const showDates = showDatesCheckbox.checked;
-    let content = `<div class="phase-label">${itemData.content || ''}</div>`;
+    
+    let label = itemData.content || '';
+    let content = `<div class="phase-label">${label}</div>`;
     if (showDates && itemData.start && itemData.end) {
-        content += `<div class="phase-dates">${(itemData.start || '').slice(0,10)} — ${(itemData.end || '').slice(0,10)}</div>`;
+        const startDateStr = itemData.start ? new Date(itemData.start).toLocaleDateString('en-GB', { month: 'numeric', day: 'numeric' }) : '';
+        const endDateStr = itemData.end ? new Date(new Date(itemData.end) - 86400000).toLocaleDateString('en-GB', { month: 'numeric', day: 'numeric' }) : ''; // Trừ 1 ngày
+        content += `<div class="phase-dates">${startDateStr} → ${endDateStr}</div>`;
     }
     return content;
   };
