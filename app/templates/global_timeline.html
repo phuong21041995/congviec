@@ -118,6 +118,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const resp = await fetch('{{ url_for("main.vis_roadmap_data") }}');
     if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
     payload = await resp.json();
+	if (!payload.success || !Array.isArray(payload.items) || payload.items.length === 0) {
+	  container.innerHTML = `
+		<div class="alert alert-info mb-0">
+		  Chưa có dự án nào để hiển thị. Nhấn <b>New Project</b> để tạo trước nhé.
+		</div>`;
+	  // (tuỳ chọn) disable các nút điều khiển để khỏi bấm nhầm
+	  ['fitBtn','zoomInBtn','zoomOutBtn','todayBtn','viewDayBtn','viewWeekBtn','viewMonthBtn']
+		.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+	  return; // dừng ở đây, không khởi tạo timeline
+	}
+
   } catch (e) {
     container.innerHTML = `<div class="alert alert-danger">Failed to load data: ${e.message}</div>`;
     return;
@@ -229,6 +240,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ready) {
       try { timeline.redraw(); } catch(e) {}
       fitToActive();
+		if (items.length === 0) {
+		  // Hiển thị một cửa sổ mặc định quanh “hôm nay” (±3 tháng)
+		  const now = new Date();
+		  const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+		  const end   = new Date(now.getFullYear(), now.getMonth() + 4, 0);
+		  timeline.setWindow(start, end, { animation: true });
+		  return;
+		}
+	  
     } else {
       requestAnimationFrame(autoFitOnShow);
     }
