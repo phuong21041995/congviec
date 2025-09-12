@@ -556,13 +556,13 @@ def add_project():
 
     if not name:
         flash('Tên dự án không được để trống.', 'danger')
-        return redirect(url_for('main.project_workspace'))
+        return redirect(url_for('main.global_timeline'))
 
     # Check for duplicate name
     existing_project = Project.query.filter_by(name=name).first()
     if existing_project:
         flash(f'Tên dự án "{name}" đã tồn tại. Vui lòng chọn tên khác.', 'warning')
-        return redirect(url_for('main.project_workspace'))
+        return redirect(url_for('main.global_timeline'))
 
     # If not a duplicate, continue
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
@@ -581,7 +581,7 @@ def add_project():
     db.session.commit()
     flash('Created new project!', 'success')
     
-    return redirect(url_for('main.project_workspace'))
+    return redirect(url_for('main.global_timeline'))
 # ADD THIS LINE
 @bp.route('/add-objective', methods=['POST'])
 @login_required
@@ -593,7 +593,7 @@ def add_objective():
     if not content:
         flash('Objective content is required.', 'danger')
         if project_id:
-            return redirect(url_for('main.project_workspace', project_id=project_id, tab='okr'))
+            return redirect(url_for('main.global_timeline', project_id=project_id, tab='okr'))
         return redirect(url_for('main.okr_page'))
 
     start_date_str = data.get('start_date_obj')
@@ -1244,6 +1244,8 @@ def update_project_details(project_id):
     flash(f'Project "{project.name}" updated successfully!', 'success')
     return redirect(url_for('main.project_workspace', project_id=project_id))
 
+# app/routes.py
+
 @bp.route('/delete-project/<int:project_id>', methods=['POST'])
 @login_required
 def delete_project(project_id):
@@ -1255,8 +1257,9 @@ def delete_project(project_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting project: {str(e)}', 'danger')
-    # SỬA LỖI: Điều hướng về trang workspace chính
-    return redirect(url_for('main.project_workspace'))
+    
+    # SỬA LẠI DÒNG NÀY:
+    return redirect(url_for('main.global_timeline'))
 
 @bp.route('/add-build', methods=['POST'])
 @login_required
@@ -2188,9 +2191,7 @@ def global_timeline():
 def global_roadmap():
     # Trang hiển thị roadmap (dùng vis-timeline)
     return render_template('global_timeline.html', page_name='global_roadmap')
-
-
-# Mở file: app/routes.py
+# app/routes.py
 
 @bp.route('/vis-roadmap-data')
 @login_required
@@ -2211,51 +2212,42 @@ def vis_roadmap_data():
         if n.startswith("e2"): return "phase-e2"
         if n.startswith("d1") or n.startswith("d") : return "phase-d1"
         if "pvt" in n: return "phase-pvt"
-        return "phase-poc" # Mặc định cho POC, C1, C2...
-
+        return "phase-poc"
 
     projects = Project.query.options(
         subqueryload(Project.builds)
-    ).order_by(Project.position, Project.name).all() # Sắp xếp theo thứ tự đã lưu
-
+    ).order_by(Project.position, Project.name).all()
 
     groups, items = [], []
 
+    # === SỬA ĐỔI LOGIC TẠI ĐÂY ===
     for p in projects:
-        builds = [b for b in p.builds if b.start_date and b.end_date]
-        if not builds:
-            continue
-
+        # 1. Luôn thêm project vào danh sách group để nó luôn hiển thị
         groups.append({"id": p.id, "content": p.name or f"Project {p.id}"})
 
-        for b in sorted(builds, key=lambda x: x.start_date):
+        # 2. Lọc và sắp xếp các build có ngày tháng hợp lệ
+        builds_with_dates = sorted(
+            [b for b in p.builds if b.start_date and b.end_date], 
+            key=lambda x: x.start_date
+        )
+
+        # 3. Chỉ tạo các "item" (thanh timeline) cho các build hợp lệ này
+        for b in builds_with_dates:
             label = (b.name or "Build").strip()
-            start_s, end_s = f_md(b.start_date), f_md(b.end_date)
-
-            # === TẠO HTML VỚI INLINE STYLE TẠI ĐÂY ===
-            label_style = "font-weight:700; font-size:16px; line-height:1.3; color:var(--text-color);"
-            date_style = "font-size:12px; line-height:1.2; color:var(--date-color); font-weight:400; opacity:0.8;"
-
-            content_html = (
-                f"<div style='{label_style}'>{label}</div>"
-                f"<div style='{date_style}'>{start_s} → {end_s}</div>"
-            )
-            # ==========================================
-
+            
             items.append({
                 "id": f"build-{b.id}",
                 "group": p.id,
-                "content": content_html,
+                "content": label, # Sửa lại chỉ truyền text, HTML sẽ được tạo bởi template
                 "start": b.start_date.isoformat(),
                 "end": add_days(b.end_date, 1).isoformat(),
                 "className": f"phase {phase_class(b.name)}",
                 "title": f"{p.name} • {label} • {b.start_date} → {b.end_date}",
                 "project_id": p.id,
             })
+    # ==============================
 
     return jsonify({"success": True, "groups": groups, "items": items})
-
-# Mở file: app/routes.py (thêm vào cuối)
 
 @bp.route('/api/projects/update-order', methods=['POST'])
 @login_required
@@ -2281,3 +2273,18 @@ def manual_timeline():
     Route để hiển thị trang vẽ timeline bằng tay.
     """
     return render_template('manual_timeline.html')
+# app/routes.py
+
+@bp.route('/delete-build/<int:build_id>', methods=['POST'])
+@login_required
+def delete_build(build_id):
+    build = Build.query.get_or_404(build_id)
+    try:
+        db.session.delete(build)
+        db.session.commit()
+        flash(f'Build "{build.name}" đã được xóa.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Lỗi khi xóa Build: {str(e)}', 'danger')
+    # Luôn điều hướng về trang timeline tổng
+    return redirect(url_for('main.global_timeline'))
