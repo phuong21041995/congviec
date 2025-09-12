@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+{% block title %}Manual Timeline Editor{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/vis/vis-timeline-graph2d.min.css') }}">
+<style>
+  /* Layout */
+  #timeline-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 270px); /* Tăng chiều cao để có chỗ cho form và options */
+  }
+  #timeline {
+    width: 100%;
+    flex: 1;
+    border: 1px solid #dee2e6;
+    border-radius: .5rem;
+  }
+  .vis-labelset .vis-label {
+    font-weight: 700;
+    font-size: 15px;
+    color: #343a40;
+    display: flex;
+    align-items: center;
+    padding-left: 1.25rem;
+  }
+  
+  /* --- BẢNG MÀU MỚI THAM KHẢO --- */
+  /* Color Palette */
+  .phase-color-0 { --phase-color:#f8d7da; --text-color:#58151c; --date-color:#7c5431; }
+  .phase-color-1 { --phase-color:#d1ecf1; --text-color:#0c5460; --date-color:#2a7886; }
+  .phase-color-2 { --phase-color:#d4edda; --text-color:#155724; --date-color:#2b7a4b; }
+  .phase-color-3 { --phase-color:#cdeec9; --text-color:#155724; --date-color:#2b7a4b; }
+  .phase-color-4 { --phase-color:#e2d9f3; --text-color:#493267; --date-color:#5b4573; }
+  .phase-color-5 { --phase-color:#28a745; --text-color:#fff; --date-color:#e0ffe0; }
+  .phase-color-6 { --phase-color:#dae0e5; --text-color:#383d41; --date-color:#5a6268; }
+  .phase-color-7 { --phase-color:#fef08a; --text-color:#0f172a; --date-color:#ca8a04; }
+  .phase-color-8 { --phase-color:#a5f3fc; --text-color:#083344; --date-color:#0e7490; }
+  .phase-color-9 { --phase-color:#d6d3d1; --text-color:#44403c; --date-color:#57534e; }
+  .phase-color-10 { --phase-color:#fbcfe8; --text-color:#831843; --date-color:#be185d; }
+  .phase-color-11 { --phase-color:#fecaca; --text-color:#b91c1c; --date-color:#dc2626; }
+
+  /* Item Styling (with Arrow) */
+  .vis-item.phase {
+    height: 54px;
+    border: none !important;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible; 
+  }
+  /* Giảm chiều cao và căn giữa khi ẩn date */
+  .vis-item.phase.hide-dates {
+      height: 36px;
+  }
+  .vis-item.phase .vis-item-content {
+    width: 100%; height: 100%;
+    background: var(--phase-color, #dbeafe);
+    border: 1px solid rgba(0, 0, 0, .08);
+    clip-path: polygon(0% 0%, calc(100% - 18px) 0%, 100% 50%, calc(100% - 18px) 100%, 0% 100%, 12px 50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 28px 6px 22px;
+  }
+  .vis-item .phase-label {
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 1.25;
+    color: var(--text-color, #0f172a);
+  }
+  .vis-item .phase-dates {
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--date-color, #334155);
+    opacity: .95;
+    margin-top: 2px;
+  }
+
+  /* Custom Modal for Alerts/Confirms */
+  .custom-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1050;
+  }
+  .custom-modal-content {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+  }
+  .custom-modal-buttons {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">Manual Timeline Editor</h2>
+    <div>
+        <div class="btn-group me-2" role="group">
+            <button id="viewDayBtn" class="btn btn-outline-secondary btn-sm">Day</button>
+            <button id="viewWeekBtn" class="btn btn-outline-secondary btn-sm active">Week</button>
+            <button id="viewMonthBtn" class="btn btn-outline-secondary btn-sm">Month</button>
+        </div>
+        <div class="btn-group" role="group">
+            <!-- THÊM: Nút quay về trang global -->
+            <a href="{{ url_for('main.global_timeline') }}" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left"></i> Global Timeline</a>
+            <button id="zoomOutBtn" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            <button id="zoomInBtn" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+            <button id="todayBtn" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-calendar-day"></i> Today</button>
+            <button id="fitBtn" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-expand"></i> Fit</button>
+            <button id="clearBtn" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i> Clear All</button>
+        </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form id="addItemForm" class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label for="projectName" class="form-label">Project Name</label>
+          <input type="text" class="form-control" id="projectName" list="project-list" required>
+          <datalist id="project-list"></datalist>
+        </div>
+        <div class="col-md-3">
+          <label for="buildName" class="form-label">Build / Phase Name</label>
+          <input type="text" class="form-control" id="buildName" required>
+        </div>
+        <div class="col-md-2">
+          <label for="startDate" class="form-label">Start Date</label>
+          <input type="date" class="form-control" id="startDate" required>
+        </div>
+        <div class="col-md-2">
+          <label for="endDate" class="form-label">End Date</label>
+          <input type="date" class="form-control" id="endDate" required>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary w-100">Add to Timeline</button>
+        </div>
+        <div class="col-auto ms-auto">
+            <div class="form-check form-switch">
+                <!-- SỬA: Bỏ checked để mặc định là TẮT -->
+                <input class="form-check-input" type="checkbox" id="showDatesCheckbox">
+                <label class="form-check-label" for="showDatesCheckbox">Show Dates</label>
+            </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="timeline-wrapper">
+    <div id="timeline"></div>
+  </div>
+</div>
+
+<div class="modal fade" id="editItemModal" tabindex="-1" aria-labelledby="editItemModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editItemModalLabel">Edit Timeline Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editItemForm">
+          <input type="hidden" id="editItemId">
+          <div class="mb-3">
+            <label for="editBuildName" class="form-label">Build / Phase Name</label>
+            <input type="text" class="form-control" id="editBuildName" required>
+          </div>
+          <div class="mb-3">
+            <label for="editStartDate" class="form-label">Start Date</label>
+            <input type="date" class="form-control" id="editStartDate" required>
+          </div>
+          <div class="mb-3">
+            <label for="editEndDate" class="form-label">End Date</label>
+            <input type="date" class="form-control" id="editEndDate" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="saveEditItemBtn">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Modal for Alerts/Confirms -->
+<div id="customModal" class="custom-modal-backdrop">
+    <div class="custom-modal-content">
+        <p id="customModalMessage"></p>
+        <div class="custom-modal-buttons">
+            <button id="customModalOkBtn" class="btn btn-primary d-none">OK</button>
+            <button id="customModalYesBtn" class="btn btn-primary d-none">Yes</button>
+            <button id="customModalNoBtn" class="btn btn-secondary d-none">No</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/vis/vis-timeline-graph2d.min.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('timeline');
+  const form = document.getElementById('addItemForm');
+  const editItemModal = new bootstrap.Modal(document.getElementById('editItemModal'));
+  const showDatesCheckbox = document.getElementById('showDatesCheckbox');
+  
+  const LS_GROUPS_KEY = 'manualTimelineGroups';
+  const LS_ITEMS_KEY  = 'manualTimelineItems';
+
+  // --- BẢNG MÀU MỚI THAM KHẢO ---
+  const COLOR_PALETTE = [
+    'phase-color-0', 'phase-color-1', 'phase-color-2', 'phase-color-3', 
+    'phase-color-4', 'phase-color-5', 'phase-color-6', 'phase-color-7',
+    'phase-color-8', 'phase-color-9', 'phase-color-10', 'phase-color-11'
+  ];
+
+  const groups = new vis.DataSet();
+  const items  = new vis.DataSet();
+
+  let nextGroupId = 1;
+  let nextItemId = 1;
+  
+  const options = {
+    stack: false,
+    editable: {
+        add: false, updateTime: false, updateGroup: false,
+        remove: true, overrideItems: false
+    },
+    margin: { item: { horizontal: 0 } },
+    template: (item) => item.content,
+    orientation: { axis: 'top' },
+    showCurrentTime: true,
+    // --- Cấu hình thang thời gian mặc định là Tuần/Ngày ---
+    timeAxis: { scale: 'week', step: 1 },
+    format: {
+        minorLabels: {
+            week: 'MMM D',
+            day: 'ddd D'
+        },
+        majorLabels: {
+            month: 'MMMM YYYY',
+            week: 'MMMM YYYY'
+        }
+    },
+    groupOrder: 'content'
+  };
+  
+  const timeline = new vis.Timeline(container, items, groups, options);
+
+  // --- Custom Modal Functions ---
+  const showModal = (message, type) => {
+      return new Promise(resolve => {
+          const modal = document.getElementById('customModal');
+          const messageEl = document.getElementById('customModalMessage');
+          const okBtn = document.getElementById('customModalOkBtn');
+          const yesBtn = document.getElementById('customModalYesBtn');
+          const noBtn = document.getElementById('customModalNoBtn');
+
+          messageEl.textContent = message;
+          okBtn.classList.add('d-none');
+          yesBtn.classList.add('d-none');
+          noBtn.classList.add('d-none');
+          
+          if (type === 'alert') {
+              okBtn.classList.remove('d-none');
+              okBtn.onclick = () => {
+                  modal.style.display = 'none';
+                  resolve(true);
+              };
+          } else if (type === 'confirm') {
+              yesBtn.classList.remove('d-none');
+              noBtn.classList.remove('d-none');
+              yesBtn.onclick = () => {
+                  modal.style.display = 'none';
+                  resolve(true);
+              };
+              noBtn.onclick = () => {
+                  modal.style.display = 'none';
+                  resolve(false);
+              };
+          }
+          modal.style.display = 'flex';
+      });
+  };
+
+  // --- Functions ---
+  const saveData = () => {
+    localStorage.setItem(LS_GROUPS_KEY, JSON.stringify(groups.get()));
+    localStorage.setItem(LS_ITEMS_KEY, JSON.stringify(items.get()));
+  };
+  
+  const loadData = () => {
+    try {
+      const savedGroups = JSON.parse(localStorage.getItem(LS_GROUPS_KEY) || '[]');
+      const savedItems = JSON.parse(localStorage.getItem(LS_ITEMS_KEY) || '[]');
+
+      if (Array.isArray(savedGroups) && savedGroups.length > 0) {
+        groups.add(savedGroups);
+        const maxGroupId = Math.max(...savedGroups.map(g => g.id));
+        if (isFinite(maxGroupId)) nextGroupId = maxGroupId + 1;
+      }
+      if (Array.isArray(savedItems) && savedItems.length > 0) {
+        savedItems.forEach(item => {
+            const buildName = item.data?.buildName || '';
+            item.content = createItemContent(buildName, item.start, item.end);
+            // SỬA: Kiểm tra trạng thái checkbox khi tải dữ liệu
+            const showDates = showDatesCheckbox.checked;
+            if (!showDates) {
+                item.className = (item.className || '') + ' hide-dates';
+            }
+        });
+        items.add(savedItems);
+        const maxItemId = Math.max(...savedItems.map(it => it.id));
+        if (isFinite(maxItemId)) nextItemId = maxItemId + 1;
+      }
+      
+      updateProjectDatalist();
+    } catch (e) {
+      console.error("Failed to load data from localStorage", e);
+    }
+  };
+
+  const updateProjectDatalist = () => {
+      const datalist = document.getElementById('project-list');
+      datalist.innerHTML = '';
+      const existingProjects = groups.get({ fields: ['content'] });
+      const projectNames = new Set(existingProjects.map(p => p.content));
+      projectNames.forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          datalist.appendChild(option);
+      });
+  };
+
+  const createItemContent = (buildName, startDate, endDate) => {
+      const showDates = showDatesCheckbox.checked;
+      let content = `<div class="phase-label">${buildName}</div>`;
+      if (showDates && startDate && endDate) {
+          content += `<div class="phase-dates">${startDate} — ${endDate}</div>`;
+      }
+      return content;
+  };
+
+  const addItemToTimeline = (e) => {
+    e.preventDefault();
+    const projectName = document.getElementById('projectName').value.trim();
+    const buildName = document.getElementById('buildName').value.trim();
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!projectName || !buildName || !startDate || !endDate) {
+      showModal('Please fill all fields.', 'alert');
+      return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+        showModal('End Date must be after Start Date.', 'alert');
+        return;
+    }
+
+    let group = groups.get({ filter: g => g.content === projectName })[0];
+    if (!group) {
+      const newGroupId = nextGroupId++;
+      const colorClass = COLOR_PALETTE[newGroupId % COLOR_PALETTE.length];
+      group = { 
+        id: newGroupId, 
+        content: projectName,
+        className: colorClass 
+      };
+      groups.add(group);
+      updateProjectDatalist();
+    }
+    const showDates = showDatesCheckbox.checked;
+    const newItemId = nextItemId++;
+    const newItem = {
+      id: newItemId,
+      group: group.id,
+      start: startDate,
+      end: endDate,
+      className: `phase ${group.className}` + (showDates ? '' : ' hide-dates'),
+      content: createItemContent(buildName, startDate, endDate),
+      data: { buildName: buildName }
+    };
+    items.add(newItem);
+
+    form.reset();
+    document.getElementById('projectName').focus();
+    timeline.fit();
+  };
+
+  // --- Event Listeners ---
+  form.addEventListener('submit', addItemToTimeline);
+  
+  items.on('*', saveData);
+  groups.on('*', saveData);
+
+  timeline.on('doubleClick', (properties) => {
+      if (properties.item) {
+          const item = items.get(properties.item);
+          const buildName = item.data?.buildName || '';
+
+          document.getElementById('editItemId').value = item.id;
+          document.getElementById('editBuildName').value = buildName;
+          document.getElementById('editStartDate').value = item.start.substring(0, 10);
+          document.getElementById('editEndDate').value = item.end ? item.end.substring(0, 10) : item.start.substring(0, 10);
+
+          editItemModal.show();
+      }
+  });
+
+  document.getElementById('saveEditItemBtn').addEventListener('click', () => {
+      const itemId = document.getElementById('editItemId').value;
+      const newBuildName = document.getElementById('editBuildName').value.trim();
+      const newStartDate = document.getElementById('editStartDate').value;
+      const newEndDate = document.getElementById('editEndDate').value;
+
+      if (!newBuildName || !newStartDate || !newEndDate) {
+          showModal('Please fill all fields in the edit form.', 'alert');
+          return;
+      }
+      if (new Date(newStartDate) > new Date(newEndDate)) {
+          showModal('End Date must be after Start Date in the edit form.', 'alert');
+          return;
+      }
+      const showDates = showDatesCheckbox.checked;
+      const updatedContent = createItemContent(newBuildName, newStartDate, newEndDate);
+      items.update({
+          id: parseInt(itemId),
+          content: updatedContent,
+          start: newStartDate,
+          end: newEndDate,
+          data: { buildName: newBuildName },
+          className: `phase ${groups.get(items.get(parseInt(itemId)).group).className}` + (showDates ? '' : ' hide-dates')
+      });
+
+      editItemModal.hide();
+      timeline.fit();
+  });
+
+  document.getElementById('showDatesCheckbox').addEventListener('change', () => {
+      const allItems = items.get();
+      const showDates = showDatesCheckbox.checked;
+      allItems.forEach(item => {
+          const updatedContent = createItemContent(item.data.buildName, item.start, item.end);
+          items.update({
+              id: item.id,
+              content: updatedContent,
+              className: `phase ${groups.get(item.group).className}` + (showDates ? '' : ' hide-dates')
+          });
+      });
+  });
+
+  // --- Event Listeners cho các nút đổi view ---
+  const viewBtns = document.querySelectorAll('.btn-group button[id^="view"]');
+  const setView = (scale) => {
+    timeline.setOptions({ timeAxis: { scale: scale, step: 1 } });
+    viewBtns.forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`view${scale.charAt(0).toUpperCase() + scale.slice(1)}Btn`).classList.add('active');
+  };
+  document.getElementById('viewDayBtn').onclick = () => setView('day');
+  document.getElementById('viewWeekBtn').onclick = () => setView('week');
+  document.getElementById('viewMonthBtn').onclick = () => setView('month');
+
+
+  // Controls
+  document.getElementById('zoomInBtn').onclick = () => timeline.zoomIn(0.5);
+  document.getElementById('zoomOutBtn').onclick = () => timeline.zoomOut(0.5);
+  document.getElementById('fitBtn').onclick = () => timeline.fit();
+  document.getElementById('todayBtn').onclick = () => timeline.moveTo(new Date());
+  document.getElementById('clearBtn').onclick = async () => {
+      const result = await showModal('Are you sure you want to clear the entire timeline? This cannot be undone.', 'confirm');
+      if (result) {
+        items.clear();
+        groups.clear();
+        saveData();
+        updateProjectDatalist();
+        nextGroupId = 1; 
+        nextItemId = 1;
+        timeline.fit();
+      }
+  };
+
+  loadData();
+  setTimeout(() => timeline.fit(), 100);
+});
+</script>
+{% endblock %}
