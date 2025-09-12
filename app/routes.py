@@ -2196,15 +2196,17 @@ def vis_roadmap_data():
         n = name.lower().strip()
         if n.startswith("p1"): return "phase-p1"
         if n.startswith("p2"): return "phase-p2"
-        if n.startswith("e1"): return "phase-e1"
+        if n.startswith("e1") or n.startswith("e") : return "phase-e1"
         if n.startswith("e2"): return "phase-e2"
-        if n.startswith("d1"): return "phase-d1"
+        if n.startswith("d1") or n.startswith("d") : return "phase-d1"
         if "pvt" in n: return "phase-pvt"
         return "phase-poc" # Mặc định cho POC, C1, C2...
 
+
     projects = Project.query.options(
         subqueryload(Project.builds)
-    ).order_by(Project.name).all()
+    ).order_by(Project.position, Project.name).all() # Sắp xếp theo thứ tự đã lưu
+
 
     groups, items = [], []
 
@@ -2242,3 +2244,29 @@ def vis_roadmap_data():
 
     return jsonify({"success": True, "groups": groups, "items": items})
 
+# Mở file: app/routes.py (thêm vào cuối)
+
+@bp.route('/api/projects/update-order', methods=['POST'])
+@login_required
+def update_project_order():
+    project_ids = request.json.get('order', [])
+    try:
+        for index, project_id in enumerate(project_ids):
+            project = Project.query.get(int(project_id))
+            if project:
+                project.position = index
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Project order updated.'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating project order: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+# Trong file routes của anh (ví dụ: app/main/routes.py)
+
+@bp.route('/manual_timeline') # <-- Anh đã có dòng này rồi, nhưng tên blueprint có thể khác
+@login_required
+def manual_timeline():
+    """
+    Route để hiển thị trang vẽ timeline bằng tay.
+    """
+    return render_template('manual_timeline.html')
